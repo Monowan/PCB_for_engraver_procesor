@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>Canvas Viewer</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100%;
+}
+
+#toolbar {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+}
+
+#canvas {
+    display: block;
+}
+</style>
+</head>
+
+<body>
+
+<div id="toolbar">
+    <input type="file" id="fileInput" accept="image/*,.pdf">
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const fileInput = document.getElementById("fileInput");
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+/* ===== IMAGE ===== */
+function loadImage(file) {
+    const img = new Image();
+    img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const scale = Math.min(
+            canvas.width / img.width,
+            canvas.height / img.height
+        );
+
+        const w = img.width * scale;
+        const h = img.height * scale;
+        const x = (canvas.width - w) / 2;
+        const y = (canvas.height - h) / 2;
+
+        ctx.drawImage(img, x, y, w, h);
+    };
+    img.src = URL.createObjectURL(file);
+}
+
+/* ===== PDF ===== */
+async function loadPDF(file) {
+    const data = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data }).promise;
+    const page = await pdf.getPage(1);
+
+    const viewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(
+        canvas.width / viewport.width,
+        canvas.height / viewport.height
+    );
+
+    const scaledViewport = page.getViewport({ scale });
+
+    canvas.width = scaledViewport.width;
+    canvas.height = scaledViewport.height;
+
+    await page.render({
+        canvasContext: ctx,
+        viewport: scaledViewport
+    }).promise;
+}
+
+/* ===== FILE HANDLING ===== */
+function handleFile(file) {
+    if (file.type === "application/pdf") {
+        loadPDF(file);
+    } else if (file.type.startsWith("image/")) {
+        loadImage(file);
+    }
+}
+
+fileInput.addEventListener("change", e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+/* ===== DRAG & DROP ===== */
+canvas.addEventListener("dragover", e => {
+    e.preventDefault();
+});
+
+canvas.addEventListener("drop", e => {
+    e.preventDefault();
+    if (e.dataTransfer.files[0]) {
+        handleFile(e.dataTransfer.files[0]);
+    }
+});
+</script>
+
+</body>
+</html>
