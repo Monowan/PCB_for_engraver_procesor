@@ -8,8 +8,9 @@
 html, body {
     margin: 0;
     padding: 0;
-    overflow: hidden;
+    width: 100%;
     height: 100%;
+    overflow: hidden;
 }
 
 #toolbar {
@@ -17,10 +18,16 @@ html, body {
     top: 10px;
     left: 10px;
     z-index: 10;
+    background: white;
+    padding: 5px;
+    border-radius: 4px;
 }
 
 #canvas {
     display: block;
+    position: absolute;
+    top: 50px; /* відступ під кнопкою */
+    left: 0;
 }
 </style>
 </head>
@@ -33,24 +40,40 @@ html, body {
 
 <canvas id="canvas"></canvas>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const fileInput = document.getElementById("fileInput");
 
+const topOffset = 50;
+const bottomOffset = 30;
+
 function resizeCanvas() {
     canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.height = window.innerHeight - topOffset - bottomOffset;
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
+
+/* ===== DRAW BORDER ===== */
+function drawBorder(x, y, w, h) {
+    ctx.save();
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+}
 
 /* ===== IMAGE ===== */
 function loadImage(file) {
     const img = new Image();
     img.onload = () => {
+        resizeCanvas();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         const scale = Math.min(
@@ -64,6 +87,7 @@ function loadImage(file) {
         const y = (canvas.height - h) / 2;
 
         ctx.drawImage(img, x, y, w, h);
+        drawBorder(x, y, w, h);
     };
     img.src = URL.createObjectURL(file);
 }
@@ -75,6 +99,7 @@ async function loadPDF(file) {
     const page = await pdf.getPage(1);
 
     const viewport = page.getViewport({ scale: 1 });
+
     const scale = Math.min(
         canvas.width / viewport.width,
         canvas.height / viewport.height
@@ -82,17 +107,28 @@ async function loadPDF(file) {
 
     const scaledViewport = page.getViewport({ scale });
 
-    canvas.width = scaledViewport.width;
-    canvas.height = scaledViewport.height;
+    canvas.width = window.innerWidth; // залишаємо всю ширину для центрирування
+    canvas.height = window.innerHeight - topOffset - bottomOffset;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // центрування PDF на canvas
+    const x = (canvas.width - scaledViewport.width) / 2;
+    const y = (canvas.height - scaledViewport.height) / 2;
 
     await page.render({
         canvasContext: ctx,
-        viewport: scaledViewport
+        viewport: scaledViewport,
+        transform: [1, 0, 0, 1, x, y] // зсув для центрирування
     }).promise;
+
+    drawBorder(x, y, scaledViewport.width, scaledViewport.height);
 }
 
 /* ===== FILE HANDLING ===== */
 function handleFile(file) {
+    if (!file) return;
+
     if (file.type === "application/pdf") {
         loadPDF(file);
     } else if (file.type.startsWith("image/")) {
@@ -100,20 +136,15 @@ function handleFile(file) {
     }
 }
 
-fileInput.addEventListener("change", e => {
-    if (e.target.files[0]) handleFile(e.target.files[0]);
-});
+/* ===== INPUT ===== */
+fileInput.addEventListener("change", e => handleFile(e.target.files[0]));
 
 /* ===== DRAG & DROP ===== */
-canvas.addEventListener("dragover", e => {
+window.addEventListener("dragenter", e => e.preventDefault());
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => {
     e.preventDefault();
-});
-
-canvas.addEventListener("drop", e => {
-    e.preventDefault();
-    if (e.dataTransfer.files[0]) {
-        handleFile(e.dataTransfer.files[0]);
-    }
+    handleFile(e.dataTransfer.files[0]);
 });
 </script>
 
