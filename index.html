@@ -2,39 +2,51 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>Vector PDF Master - UI Update</title>
+    <title>Vector PDF Master - Precision Preview</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
     <style>
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #e0e0e0; font-family: sans-serif; }
         #toolbar, #infoToolbar, #exportToolbar { position: fixed; z-index: 100; background: rgba(255, 255, 255, 0.95); padding: 12px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; gap: 10px; align-items: center; border: 1px solid #ccc; }
         #toolbar { top: 15px; left: 15px; }
-        #infoToolbar { top: 15px; right: 15px; min-width: 100px; justify-content: center; }
+        #infoToolbar { top: 15px; right: 15px; }
         #exportToolbar { bottom: 15px; right: 15px; }
-        canvas { position: absolute; top: 0; left: 0; }
-        #canvasImage { z-index: 1; pointer-events: none; }
-        #canvasCrop  { z-index: 2; cursor: default; }
-        button { padding: 6px 14px; cursor: pointer; border-radius: 4px; border: 1px solid #999; background: white; font-weight: bold; }
-        button:hover { background: #f0f0f0; }
 
-        /* Кнопки підтвердження та скасування */
+        canvas { position: absolute; top: 0; left: 0; }
+        #canvasImage { z-index: 1; }
+        #canvasOverlay { z-index: 2; pointer-events: none; }
+        #canvasCrop { z-index: 3; cursor: default; }
+
+        button { padding: 6px 14px; cursor: pointer; border-radius: 4px; border: 1px solid #999; background: white; font-weight: bold; }
         #confirmBtn { background: #4CAF50; color: white; border: none; }
         #cancelBtn { background: #f44336; color: white; border: none; }
-        #cancelBtn:hover { background: #d32f2f; }
-        #confirmBtn:hover { background: #43a047; }
-
-        #invertBtn.active { background: #263238; color: white; }
         .export-btn { background: #FF9800; color: white; border: none; }
-        .round-tool { background: #2196F3; color: white; border: none; font-size: 16px; min-width: 35px; }
-        .label-mm { font-weight: bold; color: #333; font-size: 14px; }
+        .round-tool { background: #2196F3; color: white; border: none; min-width: 35px; }
+        #invertBtn.active { background: #263238; color: white; }
+
+        .slider-box { display: flex; flex-direction: column; align-items: center; border-left: 1px solid #ccc; padding-left: 10px; }
+        .slider-box label { font-size: 10px; font-weight: bold; margin-bottom: 2px; }
     </style>
 </head>
 <body>
+
+<svg style="position: absolute; width: 0; height: 0;">
+  <filter id="docFilter" color-interpolation-filters="sRGB">
+    <feMorphology id="morphOp" operator="erode" radius="0"/>
+    <feComponentTransfer id="invertTransfer">
+      <feFuncR type="identity"/><feFuncG type="identity"/><feFuncB type="identity"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
 
 <div id="toolbar">
     <input type="file" id="fileInput" accept="image/*,.pdf">
     <button id="invertBtn">◐ Інверсія</button>
     <button id="cropBtn">Обрізати</button>
+    <div class="slider-box">
+        <label>ПРИРІСТ: <span id="dilateVal">0</span></label>
+        <input type="range" id="dilateSlider" min="0" max="10" step="0.1" value="0">
+    </div>
     <button class="round-tool align-btn" data-type="floor" style="display:none;">↓</button>
     <button class="round-tool align-btn" data-type="round" style="display:none;">≈</button>
     <button class="round-tool align-btn" data-type="ceil"  style="display:none;">↑</button>
@@ -42,14 +54,15 @@
     <button id="cancelBtn" style="display:none;">Скасувати</button>
 </div>
 
-<div id="infoToolbar"><span class="label-mm" id="sizeDisplay">0 x 0 мм</span></div>
+<div id="infoToolbar"><span id="sizeDisplay" style="font-weight:bold;">0 x 0 мм</span></div>
 
 <div id="exportToolbar">
-    <button id="exportPngBtn" class="export-btn">PNG</button>
-    <button id="exportPdfBtn" class="export-btn">PDF</button>
+    <button id="exportPngBtn" class="export-btn">PNG 1500 DPI</button>
+    <button id="exportPdfBtn" class="export-btn" style="background: #2196F3;">PDF Експорт</button>
 </div>
 
 <canvas id="canvasImage"></canvas>
+<canvas id="canvasOverlay"></canvas>
 <canvas id="canvasCrop"></canvas>
 
 <script>
@@ -57,108 +70,107 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
     const canvasImg = document.getElementById("canvasImage"), ctxImg = canvasImg.getContext("2d");
+    const canvasOvl = document.getElementById("canvasOverlay"), ctxOvl = canvasOvl.getContext("2d");
     const canvasCrp = document.getElementById("canvasCrop"), ctxCrp = canvasCrp.getContext("2d");
-    const fileInput = document.getElementById("fileInput"), invertBtn = document.getElementById("invertBtn");
-    const cropBtn = document.getElementById("cropBtn"), confirmBtn = document.getElementById("confirmBtn");
-    const cancelBtn = document.getElementById("cancelBtn"), sizeDisplay = document.getElementById("sizeDisplay");
-    const alignBtns = document.querySelectorAll(".align-btn");
-    const exportPngBtn = document.getElementById("exportPngBtn"), exportPdfBtn = document.getElementById("exportPdfBtn");
+    const dilateSlider = document.getElementById("dilateSlider"), dilateVal = document.getElementById("dilateVal");
+    const invertBtn = document.getElementById("invertBtn");
 
     let dpr = window.devicePixelRatio || 1;
-    let currentImg = null, originalImg = null, pdfDoc = null, pdfPage = null, rawPdfBytes = null;
+    let pdfPage = null, originalImg = null, rawPdfBytes = null;
     let pdfViewBox = { x: 0, y: 0, w: 0, h: 0 }, currentCoords = null, currentScale = 1;
     let isInverted = false, cropMode = false, cropRect = null;
     let dragging = false, dragPart = null, dragOffset = {x:0, y:0};
-    const sidePad = 40, topPad = 80;
 
-    function getDPI() { return currentImg ? 96 : 72; }
-    function getUnitsPerPx() { return currentCoords ? (currentImg ? 1/currentScale : pdfViewBox.w/currentCoords.w) : 1; }
+    const cacheCanvas = document.createElement("canvas");
+    const cCtx = cacheCanvas.getContext("2d");
 
-    fileInput.addEventListener("change", e => {
-        const file = e.target.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-            if (file.type === "application/pdf") {
-                rawPdfBytes = ev.target.result.slice(0);
-                pdfDoc = await pdfjsLib.getDocument({data: rawPdfBytes.slice(0)}).promise;
-                pdfPage = await pdfDoc.getPage(1);
-                const vp = pdfPage.getViewport({scale: 1});
-                pdfViewBox = { x: 0, y: 0, w: vp.width, h: vp.height };
-                currentImg = null; drawMain();
-            } else {
-                const img = new Image();
-                img.onload = () => { originalImg = img; currentImg = img; pdfPage = null; rawPdfBytes = null; drawMain(); };
-                img.src = URL.createObjectURL(file);
-            }
-        };
-        if (file.type === "application/pdf") reader.readAsArrayBuffer(file);
-        else reader.readAsDataURL(file);
-    });
-
-    async function drawMain() {
-        ctxImg.clearRect(0, 0, canvasImg.width/dpr, canvasImg.height/dpr);
-        if (!currentImg && !pdfPage) return;
-        let cw = currentImg ? currentImg.width : pdfViewBox.w, ch = currentImg ? currentImg.height : pdfViewBox.h;
-        let scale = Math.min((window.innerWidth - sidePad*2)/cw, (window.innerHeight - topPad - sidePad)/ch);
-        currentScale = scale;
-        let w = cw * scale, h = ch * scale;
-        let x = (window.innerWidth - w)/2, y = topPad + (window.innerHeight - topPad - sidePad - h)/2;
-        currentCoords = {x, y, w, h};
-        ctxImg.save();
-        if (currentImg) ctxImg.drawImage(currentImg, x, y, w, h);
-        else if (pdfPage) {
-            const vp = pdfPage.getViewport({ scale });
-            await pdfPage.render({canvasContext: ctxImg, viewport: vp, transform: [1, 0, 0, 1, x - (pdfViewBox.x * scale), y - (pdfViewBox.y * scale)]}).promise;
-        }
-        if (isInverted) { ctxImg.globalCompositeOperation = "difference"; ctxImg.fillStyle = "white"; ctxImg.fillRect(x, y, w, h); }
-        ctxImg.restore();
-        ctxImg.strokeStyle = "red"; ctxImg.setLineDash([4, 4]); ctxImg.strokeRect(x, y, w, h);
-        updateSize();
+    function updateFilterParams() {
+        dilateVal.innerText = dilateSlider.value;
+        document.getElementById("morphOp").setAttribute("radius", dilateSlider.value);
+        const funcs = document.querySelectorAll("#invertTransfer feFuncR, #invertTransfer feFuncG, #invertTransfer feFuncB");
+        funcs.forEach(f => {
+            f.setAttribute("type", isInverted ? "table" : "identity");
+            f.setAttribute("tableValues", isInverted ? "1 0" : "");
+        });
     }
 
-    exportPngBtn.addEventListener("click", async () => {
-        if (!currentCoords && !pdfPage && !currentImg) return;
-        try {
-            const targetDPI = 1500, scale = targetDPI / 72;
-            const rW = currentImg ? currentImg.width : pdfViewBox.w, rH = currentImg ? currentImg.height : pdfViewBox.h;
-            const outCanvas = document.createElement("canvas");
-            outCanvas.width = rW * scale; outCanvas.height = rH * scale;
-            if (outCanvas.width > 32767 || outCanvas.height > 32767) return alert("Завеликий розмір!");
-            const outCtx = outCanvas.getContext("2d");
-            outCtx.imageSmoothingEnabled = false;
-            if (currentImg) outCtx.drawImage(originalImg, 0, 0, outCanvas.width, outCanvas.height);
-            else if (pdfPage) {
-                const vp = pdfPage.getViewport({ scale });
-                await pdfPage.render({canvasContext: outCtx, viewport: vp, transform: [1, 0, 0, 1, -pdfViewBox.x * scale, -pdfViewBox.y * scale]}).promise;
-            }
-            const imgData = outCtx.getImageData(0, 0, outCanvas.width, outCanvas.height);
-            const data = imgData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                let avg = (data[i] + data[i+1] + data[i+2]) / 3;
-                if (isInverted) avg = 255 - avg;
-                let val = avg > 128 ? 255 : 0;
-                data[i] = data[i+1] = data[i+2] = val;
-                data[i+3] = 255;
-            }
-            outCtx.putImageData(imgData, 0, 0);
-            download(outCanvas.toDataURL("image/png"), "export.png", "image/png");
-        } catch (e) { alert("Помилка пам'яті."); }
-    });
+    dilateSlider.oninput = () => { updateFilterParams(); fastRedraw(); };
+    invertBtn.onclick = () => { isInverted = !isInverted; invertBtn.classList.toggle("active"); updateFilterParams(); fastRedraw(); };
 
-    exportPdfBtn.addEventListener("click", async () => {
-        if (!pdfPage || !rawPdfBytes) return alert("Тільки PDF");
-        const pdfDocLib = await PDFDocument.load(rawPdfBytes.slice(0));
-        const firstPage = pdfDocLib.getPages()[0];
-        const { height } = firstPage.getMediaBox();
-        const x = pdfViewBox.x, w = pdfViewBox.w, h = pdfViewBox.h, y = height - pdfViewBox.y - h;
-        firstPage.setCropBox(x, y, w, h); firstPage.setMediaBox(x, y, w, h);
-        if (isInverted) firstPage.drawRectangle({ x, y, width: w, height: h, color: rgb(1,1,1), blendMode: 'Difference' });
-        download(await pdfDocLib.save(), "export.pdf", "application/pdf");
-    });
+    document.getElementById("fileInput").onchange = async (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        if (file.type === "application/pdf") {
+            rawPdfBytes = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({data: rawPdfBytes.slice(0)}).promise;
+            pdfPage = await pdf.getPage(1);
+            const vp = pdfPage.getViewport({scale: 1});
+            pdfViewBox = { x: 0, y: 0, w: vp.width, h: vp.height };
+            originalImg = null;
+        } else {
+            const img = new Image(); img.src = URL.createObjectURL(file);
+            await img.decode(); originalImg = img; pdfPage = null;
+        }
+        await fullDraw();
+    };
 
+    // --- ВИПРАВЛЕНО: ІНВЕРСІЯ ТІЛЬКИ В МЕЖАХ РАМКИ ---
+    function fastRedraw() {
+        if (!currentCoords) return;
+        const {dx, dy, dw, dh} = currentCoords;
+        const w = window.innerWidth, h = window.innerHeight;
+
+        // Очищаємо весь канвас
+        ctxImg.clearRect(0, 0, w * dpr, h * dpr);
+
+        ctxImg.save();
+        // Створюємо шлях обрізки (clip) точно по межах документа
+        ctxImg.beginPath();
+        ctxImg.rect(dx, dy, dw, dh);
+        ctxImg.clip();
+
+        // Застосовуємо фільтр тільки до обрізаної області
+        ctxImg.filter = "url(#docFilter)";
+        ctxImg.drawImage(cacheCanvas, 0, 0, w, h);
+        ctxImg.restore();
+    }
+
+    async function fullDraw() {
+        const w = window.innerWidth, h = window.innerHeight;
+        [canvasImg, canvasOvl, canvasCrp, cacheCanvas].forEach(c => {
+            c.width = w * dpr; c.height = h * dpr; c.style.width = w+"px"; c.style.height = h+"px";
+        });
+        [ctxImg, ctxOvl, ctxCrp, cCtx].forEach(ctx => ctx.setTransform(dpr, 0, 0, dpr, 0, 0));
+
+        if (!originalImg && !pdfPage) return;
+        let cw = originalImg ? originalImg.width : pdfViewBox.w, ch = originalImg ? originalImg.height : pdfViewBox.h;
+        let scale = Math.min((w - 100)/cw, (h - 150)/ch);
+        currentScale = scale;
+        let dw = cw * scale, dh = ch * scale;
+        let dx = (w - dw)/2, dy = 80 + (h - 80 - 40 - dh)/2;
+        currentCoords = {dx, dy, dw, dh};
+
+        cCtx.clearRect(0, 0, w, h);
+        if (originalImg) {
+            cCtx.drawImage(originalImg, dx, dy, dw, dh);
+        } else {
+            const vp = pdfPage.getViewport({ scale });
+            await pdfPage.render({canvasContext: cCtx, viewport: vp, transform: [1, 0, 0, 1, dx - (pdfViewBox.x * scale), dy - (pdfViewBox.y * scale)]}).promise;
+        }
+
+        updateFilterParams();
+        fastRedraw();
+
+        ctxOvl.clearRect(0, 0, w, h);
+        ctxOvl.strokeStyle = "red"; ctxOvl.lineWidth = 1; ctxOvl.setLineDash([5, 5]);
+        ctxOvl.strokeRect(dx, dy, dw, dh);
+
+        updateSizeLabel();
+    }
+
+    // --- КРОП ЛОГІКА ---
     function getPart(mx, my) {
         if (!cropRect) return null;
-        const s = 12, {x, y, w, h} = cropRect;
+        const {x, y, w, h} = cropRect; const s = 10;
         if (Math.abs(mx-x)<s && Math.abs(my-y)<s) return "tl";
         if (Math.abs(mx-(x+w))<s && Math.abs(my-y)<s) return "tr";
         if (Math.abs(mx-x)<s && Math.abs(my-(y+h))<s) return "bl";
@@ -171,100 +183,162 @@
         return null;
     }
 
-    canvasCrp.addEventListener("mousedown", e => {
+    canvasCrp.onmousedown = (e) => {
         if (!cropMode) return;
         const part = getPart(e.offsetX, e.offsetY);
-        if (!part) return;
-        dragging = true; dragPart = part;
-        dragOffset = { x: e.offsetX - cropRect.x, y: e.offsetY - cropRect.y };
-    });
+        if (part) { dragging = true; dragPart = part; dragOffset = { x: e.offsetX - cropRect.x, y: e.offsetY - cropRect.y }; }
+    };
 
-    window.addEventListener("mousemove", e => {
+    window.onmousemove = (e) => {
+        if (!cropMode) return;
         const mx = e.offsetX, my = e.offsetY;
-        if (cropMode && !dragging) {
+        if (!dragging) {
             const p = getPart(mx, my);
-            const cursors = { tl:"nwse-resize", br:"nwse-resize", tr:"nesw-resize", bl:"nesw-resize", t:"ns-resize", b:"ns-resize", l:"ew-resize", r:"ew-resize", center:"move" };
-            canvasCrp.style.cursor = cursors[p] || "default";
+            const cursors = { t:"ns-resize", b:"ns-resize", l:"ew-resize", r:"ew-resize", tl:"nwse-resize", br:"nwse-resize", tr:"nesw-resize", bl:"nesw-resize", center:"move" };
+            canvasCrp.style.cursor = cursors[p] || "default"; return;
         }
-        if (!dragging) return;
-        const min = 15;
         if (dragPart === "center") { cropRect.x = mx - dragOffset.x; cropRect.y = my - dragOffset.y; }
         else {
-            if (dragPart.includes("t")) { let d = cropRect.y-my; if(cropRect.h+d>min){ cropRect.h+=d; cropRect.y=my; } }
-            if (dragPart.includes("b")) cropRect.h = Math.max(min, my - cropRect.y);
-            if (dragPart.includes("l")) { let d = cropRect.x-mx; if(cropRect.w+d>min){ cropRect.w+=d; cropRect.x=mx; } }
-            if (dragPart.includes("r")) cropRect.w = Math.max(min, mx - cropRect.x);
+            if (dragPart.includes("t")) { cropRect.h += cropRect.y - my; cropRect.y = my; }
+            if (dragPart.includes("b")) { cropRect.h = my - cropRect.y; }
+            if (dragPart.includes("l")) { cropRect.w += cropRect.x - mx; cropRect.x = mx; }
+            if (dragPart.includes("r")) { cropRect.w = mx - cropRect.x; }
         }
         drawCropFrame();
-    });
+    };
 
-    window.addEventListener("mouseup", () => dragging = false);
+    window.onmouseup = () => dragging = false;
 
     function drawCropFrame() {
-        ctxCrp.clearRect(0,0,canvasCrp.width/dpr, canvasCrp.height/dpr);
-        if(!cropMode || !cropRect) return;
-        ctxCrp.fillStyle = "rgba(0,0,0,0.5)"; ctxCrp.fillRect(0,0,canvasCrp.width/dpr, canvasCrp.height/dpr);
+        ctxCrp.clearRect(0,0, window.innerWidth, window.innerHeight);
+        if(!cropMode) return;
+        ctxCrp.fillStyle = "rgba(0,0,0,0.4)"; ctxCrp.fillRect(0,0, window.innerWidth, window.innerHeight);
         ctxCrp.clearRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
-        ctxCrp.strokeStyle = "#00bfff"; ctxCrp.lineWidth = 2; ctxCrp.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
-        ctxCrp.fillStyle = "white";
-        [[0,0],[1,0],[0,1],[1,1]].forEach(p => { ctxCrp.fillRect(cropRect.x + p[0]*cropRect.w - 4, cropRect.y + p[1]*cropRect.h - 4, 8, 8); ctxCrp.strokeRect(cropRect.x + p[0]*cropRect.w - 4, cropRect.y + p[1]*cropRect.h - 4, 8, 8); });
-        updateSize();
+        ctxCrp.strokeStyle = "#00bfff"; ctxCrp.lineWidth = 2; ctxCrp.setLineDash([]);
+        ctxCrp.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
+        updateSizeLabel();
     }
 
-    alignBtns.forEach(btn => {
-        btn.addEventListener("click", () => {
-            if (!cropMode || !cropRect) return;
-            const type = btn.getAttribute("data-type"), dpi = getDPI(), uPx = getUnitsPerPx();
-            const mmW = (cropRect.w * uPx / dpi) * 25.4, mmH = (cropRect.h * uPx / dpi) * 25.4;
-            let tW, tH;
-            if (type === "floor") { tW = Math.floor(mmW - 0.01); tH = Math.floor(mmH - 0.01); }
-            else if (type === "round") { tW = Math.round(mmW); tH = Math.round(mmH); }
-            else { tW = Math.ceil(mmW + 0.01); tH = Math.ceil(mmH + 0.01); }
-            const pxW = ((Math.max(1, tW) / 25.4) * dpi) / uPx, pxH = ((Math.max(1, tH) / 25.4) * dpi) / uPx;
-            cropRect.x -= (pxW - cropRect.w)/2; cropRect.y -= (pxH - cropRect.h)/2;
-            cropRect.w = pxW; cropRect.h = pxH; drawCropFrame();
-        });
+    document.querySelectorAll(".align-btn").forEach(btn => {
+        btn.onclick = () => {
+            const u = originalImg ? 1/currentScale : pdfViewBox.w/currentCoords.dw;
+            const dpi = originalImg ? 96 : 72;
+            let mmW = (cropRect.w * u / dpi) * 25.4, mmH = (cropRect.h * u / dpi) * 25.4;
+            const tW = btn.dataset.type==='floor'?Math.floor(mmW):btn.dataset.type==='ceil'?Math.ceil(mmW):Math.round(mmW);
+            const tH = btn.dataset.type==='floor'?Math.floor(mmH):btn.dataset.type==='ceil'?Math.ceil(mmH):Math.round(mmH);
+            cropRect.w = (tW / 25.4 * dpi) / u; cropRect.h = (tH / 25.4 * dpi) / u;
+            drawCropFrame();
+        };
     });
 
-    function download(data, name, type) {
-        const link = document.createElement("a"); link.download = name;
-        link.href = (typeof data === "string") ? data : URL.createObjectURL(new Blob([data], {type}));
-        link.click();
-    }
+    document.getElementById("cropBtn").onclick = () => {
+        cropMode = true;
+        cropRect = { x: currentCoords.dx, y: currentCoords.dy, w: currentCoords.dw, h: currentCoords.dh };
+        document.querySelectorAll("#confirmBtn, #cancelBtn, .align-btn").forEach(b => b.style.display = "inline");
+        canvasCrp.style.display = "block";
+        drawCropFrame();
+    };
 
-    cropBtn.addEventListener("click", () => { if(!currentCoords) return; cropMode=true; cropRect={...currentCoords}; [confirmBtn, cancelBtn, ...alignBtns].forEach(b=>b.style.display="inline"); drawCropFrame(); });
-    confirmBtn.addEventListener("click", () => {
-        const uPx = getUnitsPerPx();
-        if (currentImg) {
-            const sw = cropRect.w * uPx, sh = cropRect.h * uPx;
+    document.getElementById("cancelBtn").onclick = () => {
+        cropMode = false;
+        document.querySelectorAll("#confirmBtn, #cancelBtn, .align-btn").forEach(b => b.style.display = "none");
+        canvasCrp.style.display = "none";
+    };
+
+    document.getElementById("confirmBtn").onclick = async () => {
+        const u = originalImg ? 1/currentScale : pdfViewBox.w/currentCoords.dw;
+        if (originalImg) {
+            const sw = cropRect.w * u, sh = cropRect.h * u;
             const temp = document.createElement("canvas"); temp.width = sw; temp.height = sh;
-            const sx = (cropRect.x - currentCoords.x) * uPx, sy = (cropRect.y - currentCoords.y) * uPx;
-            temp.getContext("2d").drawImage(originalImg, sx, sy, sw, sh, 0, 0, sw, sh);
+            temp.getContext("2d").drawImage(originalImg, (cropRect.x - currentCoords.dx) * u, (cropRect.y - currentCoords.dy) * u, sw, sh, 0, 0, sw, sh);
             const img = new Image(); img.src = temp.toDataURL();
-            img.onload = () => { originalImg = img; currentImg = img; isInverted = false; exit(); };
+            await new Promise(r => img.onload = r); originalImg = img;
         } else {
-            pdfViewBox.x += (cropRect.x - currentCoords.x) * uPx; pdfViewBox.y += (cropRect.y - currentCoords.y) * uPx;
-            pdfViewBox.w = cropRect.w * uPx; pdfViewBox.h = cropRect.h * uPx; exit();
+            pdfViewBox.x += (cropRect.x - currentCoords.dx) * u; pdfViewBox.y += (cropRect.y - currentCoords.dy) * u;
+            pdfViewBox.w = cropRect.w * u; pdfViewBox.h = cropRect.h * u;
         }
-    });
+        document.getElementById("cancelBtn").click(); await fullDraw();
+    };
 
-    function exit() { cropMode = false; [confirmBtn, cancelBtn, ...alignBtns].forEach(b => b.style.display = "none"); ctxCrp.clearRect(0,0,canvasCrp.width/dpr, canvasCrp.height/dpr); drawMain(); }
-    function updateSize() {
-        let w = 0, h = 0; const dpi = getDPI(), uPx = getUnitsPerPx();
-        if (cropMode && cropRect) { w = cropRect.w * uPx; h = cropRect.h * uPx; }
-        else if (currentImg) { w = currentImg.width; h = currentImg.height; }
-        else if (pdfViewBox) { w = pdfViewBox.w; h = pdfViewBox.h; }
-        sizeDisplay.innerText = `${((w/dpi)*25.4).toFixed(1)} x ${((h/dpi)*25.4).toFixed(1)} мм`;
+    // --- ЕКСПОРТ (БЕЗ ЗМІН) ---
+    async function getProcessedCanvas(targetDPI) {
+        const exportScale = targetDPI / 72;
+        const rW = (originalImg ? originalImg.width * (targetDPI/96) : pdfViewBox.w * exportScale);
+        const rH = (originalImg ? originalImg.height * (targetDPI/96) : pdfViewBox.h * exportScale);
+
+        const out = document.createElement("canvas");
+        out.width = rW; out.height = rH;
+        const oCtx = out.getContext("2d");
+
+        if (originalImg) {
+            oCtx.drawImage(originalImg, 0, 0, rW, rH);
+        } else {
+            const vp = pdfPage.getViewport({ scale: exportScale });
+            await pdfPage.render({
+                canvasContext: oCtx, viewport: vp,
+                transform: [1, 0, 0, 1, -pdfViewBox.x * exportScale, -pdfViewBox.y * exportScale]
+            }).promise;
+        }
+
+        const previewWidthPixels = currentCoords.dw * dpr;
+        const multiplier = rW / previewWidthPixels;
+        const exportRadius = parseFloat(dilateSlider.value) * multiplier;
+
+        const final = document.createElement("canvas");
+        final.width = rW; final.height = rH;
+        const fCtx = final.getContext("2d");
+
+        const fId = "expFilter_" + Date.now();
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.style.position = "absolute"; svg.style.top = "-9999px";
+        svg.innerHTML = `
+            <filter id="${fId}" color-interpolation-filters="sRGB">
+                <feMorphology operator="erode" radius="${exportRadius}"/>
+                <feComponentTransfer>
+                    ${isInverted ? '<feFuncR type="table" tableValues="1 0"/><feFuncG type="table" tableValues="1 0"/><feFuncB type="table" tableValues="1 0"/>' : ''}
+                </feComponentTransfer>
+            </filter>`;
+        document.body.appendChild(svg);
+
+        fCtx.filter = `url(#${fId})`;
+        fCtx.drawImage(out, 0, 0);
+
+        const d = fCtx.getImageData(0, 0, rW, rH);
+        for(let i = 0; i < d.data.length; i += 4) {
+            let avg = (d.data[i] + d.data[i+1] + d.data[i+2]) / 3;
+            let val = avg > 128 ? 255 : 0;
+            d.data[i] = d.data[i+1] = d.data[i+2] = val;
+            d.data[i+3] = 255;
+        }
+        fCtx.putImageData(d, 0, 0);
+        document.body.removeChild(svg);
+        return final;
     }
-    invertBtn.addEventListener("click", () => { isInverted = !isInverted; invertBtn.classList.toggle("active"); drawMain(); });
-    cancelBtn.addEventListener("click", exit);
-    function resize() {
-        const w = window.innerWidth, h = window.innerHeight;
-        [canvasImg, canvasCrp].forEach(c => { c.style.width = w+"px"; c.style.height = h+"px"; c.width = w*dpr; c.height = h*dpr; });
-        ctxImg.setTransform(dpr,0,0,dpr,0,0); ctxCrp.setTransform(dpr,0,0,dpr,0,0);
-        drawMain(); if(cropMode) drawCropFrame();
+
+    document.getElementById("exportPngBtn").onclick = async () => {
+        const out = await getProcessedCanvas(1500);
+        const a = document.createElement("a"); a.download = "export_1500dpi.png";
+        a.href = out.toDataURL("image/png"); a.click();
+    };
+
+    document.getElementById("exportPdfBtn").onclick = async () => {
+        const out = await getProcessedCanvas(600);
+        const pdfDoc = await PDFDocument.create();
+        const pngImg = await pdfDoc.embedPng(out.toDataURL("image/png"));
+        const page = pdfDoc.addPage([pdfViewBox.w, pdfViewBox.h]);
+        page.drawImage(pngImg, { x: 0, y: 0, width: pdfViewBox.w, height: pdfViewBox.h });
+        const a = document.createElement("a"); a.download = "processed.pdf";
+        a.href = URL.createObjectURL(new Blob([await pdfDoc.save()])); a.click();
+    };
+
+    function updateSizeLabel() {
+        if (!currentCoords) return;
+        const u = originalImg ? 1/currentScale : pdfViewBox.w/currentCoords.dw;
+        const w = (cropMode ? cropRect.w : currentCoords.dw), h = (cropMode ? cropRect.h : currentCoords.dh);
+        document.getElementById("sizeDisplay").innerText = `${((w*u/(originalImg?96:72))*25.4).toFixed(1)} x ${((h*u/(originalImg?96:72))*25.4).toFixed(1)} мм`;
     }
-    window.addEventListener("resize", resize); resize();
+
+    window.onresize = fullDraw;
 </script>
 </body>
 </html>
