@@ -5,78 +5,44 @@
     <title>Vector PDF & Image Cropper</title>
     <style>
         html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #e0e0e0;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #e0e0e0;
+            font-family: sans-serif;
         }
         #toolbar, #infoToolbar {
-            position: fixed;
-            top: 15px;
-            z-index: 10;
+            position: fixed; top: 15px; z-index: 100;
             background: rgba(255, 255, 255, 0.95);
-            padding: 12px;
-            border-radius: 8px;
+            padding: 12px; border-radius: 8px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            border: 1px solid #ccc;
-            font-family: sans-serif;
-            font-size: 14px;
+            display: flex; gap: 10px; align-items: center; border: 1px solid #ccc;
         }
         #toolbar { left: 15px; }
         #infoToolbar { right: 15px; min-width: 100px; justify-content: center; }
 
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
+        canvas { position: absolute; top: 0; left: 0; }
         #canvasImage { z-index: 1; }
-        #canvasCrop  { z-index: 2; }
+        #canvasCrop  { z-index: 2; cursor: default; }
 
         button {
-            padding: 6px 12px;
-            cursor: pointer;
-            border-radius: 4px;
-            border: 1px solid #999;
-            background: white;
-            font-weight: bold;
-            transition: background 0.2s;
-            white-space: nowrap;
+            padding: 6px 12px; cursor: pointer; border-radius: 4px;
+            border: 1px solid #999; background: white; font-weight: bold;
         }
-        button:hover { background: #f0f0f0; }
-
         #confirmBtn { background: #4CAF50; color: white; border: none; }
-        #confirmBtn:hover { background: #45a049; }
-
-        #cancelBtn { background: #f44336; color: white; border: none; }
-        #cancelBtn:hover { background: #da190b; }
-
-        .round-tool {
-            background: #2196F3;
-            color: white;
-            border: none;
-            font-size: 16px;
-            padding: 4px 12px;
-        }
-        .round-tool:hover { background: #1e88e5; }
-
-        .label-mm { font-weight: bold; color: #333; }
+        #invertBtn.active { background: #263238; color: white; }
+        .round-tool { background: #2196F3; color: white; border: none; font-size: 16px; }
+        .label-mm { font-weight: bold; color: #333; font-size: 14px; }
     </style>
 </head>
 <body>
 
 <div id="toolbar">
     <input type="file" id="fileInput" accept="image/*,.pdf">
+    <button id="invertBtn">◐ Інверсія</button>
     <button id="cropBtn">Обрізати</button>
 
-    <button class="round-tool align-btn" data-type="floor" title="В меншу сторону (floor)" style="display:none;">↓</button>
-    <button class="round-tool align-btn" data-type="round" title="До найближчого цілого (round)" style="display:none;">≈</button>
-    <button class="round-tool align-btn" data-type="ceil"  title="В більшу сторону (ceil)" style="display:none;">↑</button>
+    <button class="round-tool align-btn" data-type="floor" style="display:none;">↓</button>
+    <button class="round-tool align-btn" data-type="round" style="display:none;">≈</button>
+    <button class="round-tool align-btn" data-type="ceil"  style="display:none;">↑</button>
 
     <button id="confirmBtn" style="display:none;">Підтвердити</button>
     <button id="cancelBtn" style="display:none;">Скасувати</button>
@@ -93,329 +59,210 @@
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-    const canvasImage = document.getElementById("canvasImage");
-    const ctxImage = canvasImage.getContext("2d");
-    const canvasCrop  = document.getElementById("canvasCrop");
-    const ctxCrop  = canvasCrop.getContext("2d");
-
-    const fileInput = document.getElementById("fileInput");
-    const cropBtn = document.getElementById("cropBtn");
-    const confirmBtn = document.getElementById("confirmBtn");
-    const cancelBtn = document.getElementById("cancelBtn");
+    const canvasImg = document.getElementById("canvasImage"), ctxImg = canvasImg.getContext("2d");
+    const canvasCrp = document.getElementById("canvasCrop"), ctxCrp = canvasCrp.getContext("2d");
+    const fileInput = document.getElementById("fileInput"), invertBtn = document.getElementById("invertBtn");
+    const cropBtn = document.getElementById("cropBtn"), confirmBtn = document.getElementById("confirmBtn");
+    const cancelBtn = document.getElementById("cancelBtn"), sizeDisplay = document.getElementById("sizeDisplay");
     const alignBtns = document.querySelectorAll(".align-btn");
-    const sizeDisplay = document.getElementById("sizeDisplay");
 
     let dpr = window.devicePixelRatio || 1;
-    let currentImage = null;
-    let originalImage = null;
-    let cropMode = false;
-    let cropRect = null;
-    let dragging = false;
-    let dragPart = null; // Раніше dragCorner
-    let dragWhole = false;
-    let dragOffset = {x:0, y:0};
+    let currentImg = null, originalImg = null, pdfDoc = null, pdfPage = null;
+    let pdfViewBox = null, currentCoords = null, currentScale = 1;
+    let isInverted = false, cropMode = false, cropRect = null;
 
-    let currentImageCoords = null;
-    let currentScale = 1;
+    let dragging = false, dragPart = null, dragOffset = {x:0, y:0};
 
-    let pdfDoc = null;
-    let pdfPage = null;
-    let pdfViewBox = null;
+    const sidePad = 40, topPad = 80;
 
-    const sidePadding = 40;
-    const topReservedSpace = 80;
-
-    function getDPI() { return currentImage ? 96 : 72; }
-    function getUnitsPerPixel() {
-        if (!currentImageCoords) return 1;
-        if (currentImage) return 1 / currentScale;
-        return pdfViewBox.w / currentImageCoords.w;
+    function getDPI() { return currentImg ? 96 : 72; }
+    function getUnitsPerPx() {
+        return currentCoords ? (currentImg ? 1/currentScale : pdfViewBox.w/currentCoords.w) : 1;
     }
 
-    function updateSizeDisplay() {
-        let wInUnits = 0, hInUnits = 0;
-        const dpi = getDPI();
-        const unitsPerPx = getUnitsPerPixel();
+    function updateSize() {
+        let w = 0, h = 0;
+        const dpi = getDPI(), uPx = getUnitsPerPx();
+        if (cropMode && cropRect) { w = cropRect.w * uPx; h = cropRect.h * uPx; }
+        else if (currentImg) { w = currentImg.width; h = currentImg.height; }
+        else if (pdfViewBox) { w = pdfViewBox.w; h = pdfViewBox.h; }
+        sizeDisplay.innerText = `${((w/dpi)*25.4).toFixed(1)} x ${((h/dpi)*25.4).toFixed(1)} мм`;
+    }
 
-        if (cropMode && cropRect) {
-            wInUnits = cropRect.w * unitsPerPx;
-            hInUnits = cropRect.h * unitsPerPx;
-        } else if (currentImage) {
-            wInUnits = currentImage.width; hInUnits = currentImage.height;
-        } else if (pdfViewBox) {
-            wInUnits = pdfViewBox.w; hInUnits = pdfViewBox.h;
+    async function drawMain() {
+        ctxImg.clearRect(0, 0, canvasImg.width/dpr, canvasImg.height/dpr);
+        if (!currentImg && !pdfPage) return;
+
+        let cw = currentImg ? currentImg.width : pdfViewBox.w;
+        let ch = currentImg ? currentImg.height : pdfViewBox.h;
+        let scale = Math.min((window.innerWidth - sidePad*2)/cw, (window.innerHeight - topPad - sidePad)/ch);
+        currentScale = scale;
+
+        let w = cw * scale, h = ch * scale;
+        let x = (window.innerWidth - w)/2, y = topPad + (window.innerHeight - topPad - sidePad - h)/2;
+        currentCoords = {x, y, w, h};
+
+        ctxImg.save();
+        if (currentImg) {
+            ctxImg.drawImage(currentImg, x, y, w, h);
+        } else {
+            const vp = pdfPage.getViewport({ scale });
+            await pdfPage.render({
+                canvasContext: ctxImg, viewport: vp,
+                transform: [1, 0, 0, 1, x - (pdfViewBox.x * scale), y - (pdfViewBox.y * scale)]
+            }).promise;
         }
 
-        const mmW = (wInUnits / dpi) * 25.4;
-        const mmH = (hInUnits / dpi) * 25.4;
-        sizeDisplay.innerText = `${mmW.toFixed(1)} x ${mmH.toFixed(1)} мм`;
-    }
-
-    alignBtns.forEach(btn => {
-        btn.addEventListener("click", () => {
-            if (!cropMode || !cropRect) return;
-            const type = btn.getAttribute("data-type");
-            const dpi = getDPI();
-            const unitsPerPx = getUnitsPerPixel();
-            const currentMmW = (cropRect.w * unitsPerPx / dpi) * 25.4;
-            const currentMmH = (cropRect.h * unitsPerPx / dpi) * 25.4;
-
-            let targetMmW, targetMmH;
-            if (type === "floor") {
-                targetMmW = Math.floor(currentMmW - 0.001);
-                targetMmH = Math.floor(currentMmH - 0.001);
-            } else if (type === "round") {
-                targetMmW = Math.round(currentMmW);
-                targetMmH = Math.round(currentMmH);
-            } else {
-                targetMmW = Math.ceil(currentMmW + 0.001);
-                targetMmH = Math.ceil(currentMmH + 0.001);
-            }
-
-            targetMmW = Math.max(1, targetMmW);
-            targetMmH = Math.max(1, targetMmH);
-
-            const targetUnitsW = (targetMmW / 25.4) * dpi;
-            const targetUnitsH = (targetMmH / 25.4) * dpi;
-            const targetPxW = targetUnitsW / unitsPerPx;
-            const targetPxH = targetUnitsH / unitsPerPx;
-
-            const deltaW = targetPxW - cropRect.w;
-            const deltaH = targetPxH - cropRect.h;
-
-            cropRect.x -= deltaW / 2;
-            cropRect.y -= deltaH / 2;
-            cropRect.w = targetPxW;
-            cropRect.h = targetPxH;
-
-            drawCrop();
-        });
-    });
-
-    function resizeCanvas() {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        [canvasImage, canvasCrop].forEach(c => {
-            c.style.width = width + "px";
-            c.style.height = height + "px";
-            c.width = width * dpr;
-            c.height = height * dpr;
-        });
-        ctxImage.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctxCrop.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawImageLayer();
-        if(cropMode) drawCrop();
-    }
-
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
-
-    async function drawImageLayer() {
-        ctxImage.clearRect(0, 0, canvasImage.width/dpr, canvasImage.height/dpr);
-        const availableWidth = window.innerWidth - (sidePadding * 2);
-        const availableHeight = window.innerHeight - topReservedSpace - sidePadding;
-
-        if (currentImage || (pdfPage && pdfViewBox)) {
-            let contentW = currentImage ? currentImage.width : pdfViewBox.w;
-            let contentH = currentImage ? currentImage.height : pdfViewBox.h;
-            const scale = Math.min(availableWidth / contentW, availableHeight / contentH);
-            currentScale = scale;
-            const w = contentW * scale, h = contentH * scale;
-            const x = (window.innerWidth - w) / 2;
-            const y = topReservedSpace + (availableHeight - h) / 2;
-            currentImageCoords = {x, y, w, h};
-
-            if (currentImage) {
-                ctxImage.drawImage(currentImage, x, y, w, h);
-            } else {
-                const viewport = pdfPage.getViewport({ scale: scale });
-                await pdfPage.render({
-                    canvasContext: ctxImage,
-                    viewport: viewport,
-                    transform: [1, 0, 0, 1, x - (pdfViewBox.x * scale), y - (pdfViewBox.y * scale)]
-                }).promise;
-            }
-            drawBorder(ctxImage, x, y, w, h, "red");
-            updateSizeDisplay();
+        if (isInverted) {
+            ctxImg.globalCompositeOperation = "difference";
+            ctxImg.fillStyle = "white";
+            ctxImg.fillRect(x, y, w, h);
         }
+        ctxImg.restore();
+
+        ctxImg.strokeStyle = "red"; ctxImg.setLineDash([4, 4]);
+        ctxImg.strokeRect(x, y, w, h);
+        updateSize();
     }
 
-    function drawBorder(ctx, x, y, w, h, color) {
-        ctx.save();
-        ctx.strokeStyle = color; ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]); ctx.strokeRect(x, y, w, h);
-        ctx.restore();
-    }
+    function drawCropFrame() {
+        ctxCrp.clearRect(0, 0, canvasCrp.width/dpr, canvasCrp.height/dpr);
+        if (!cropMode || !cropRect) return;
 
-    function drawCrop() {
-        ctxCrop.clearRect(0, 0, canvasCrop.width/dpr, canvasCrop.height/dpr);
-        if (!cropRect) return;
-        ctxCrop.save();
-        ctxCrop.fillStyle = "rgba(0,0,0,0.4)";
-        ctxCrop.fillRect(0, 0, canvasCrop.width/dpr, canvasCrop.height/dpr);
-        ctxCrop.clearRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
-        ctxCrop.strokeStyle = "#00bfff"; ctxCrop.lineWidth = 2;
-        ctxCrop.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
-        const s = 10; ctxCrop.fillStyle = "#fff";
-        [[0,0], [1,0], [0,1], [1,1]].forEach(p => {
-            ctxCrop.fillRect(cropRect.x + p[0]*cropRect.w - s/2, cropRect.y + p[1]*cropRect.h - s/2, s, s);
-            ctxCrop.strokeRect(cropRect.x + p[0]*cropRect.w - s/2, cropRect.y + p[1]*cropRect.h - s/2, s, s);
+        ctxCrp.fillStyle = "rgba(0,0,0,0.4)";
+        ctxCrp.fillRect(0, 0, canvasCrp.width/dpr, canvasCrp.height/dpr);
+        ctxCrp.clearRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
+
+        ctxCrp.strokeStyle = "#00bfff"; ctxCrp.lineWidth = 2;
+        ctxCrp.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
+
+        // Малюємо маркери
+        ctxCrp.fillStyle = "white";
+        const s = 8;
+        [[0,0],[1,0],[0,1],[1,1]].forEach(p => {
+            ctxCrp.fillRect(cropRect.x + p[0]*cropRect.w - s/2, cropRect.y + p[1]*cropRect.h - s/2, s, s);
+            ctxCrp.strokeRect(cropRect.x + p[0]*cropRect.w - s/2, cropRect.y + p[1]*cropRect.h - s/2, s, s);
         });
-        ctxCrop.restore();
-        updateSizeDisplay();
+        updateSize();
     }
 
-    function getInteractionPart(mx, my) {
+    function getPart(mx, my) {
         if (!cropRect) return null;
-        const s = 15; // Чутливість кліку (пікселі)
-
-        // Перевірка кутів (пріоритет)
-        if (Math.abs(mx - cropRect.x) < s && Math.abs(my - cropRect.y) < s) return "tl";
-        if (Math.abs(mx - (cropRect.x + cropRect.w)) < s && Math.abs(my - cropRect.y) < s) return "tr";
-        if (Math.abs(mx - cropRect.x) < s && Math.abs(my - (cropRect.y + cropRect.h)) < s) return "bl";
-        if (Math.abs(mx - (cropRect.x + cropRect.w)) < s && Math.abs(my - (cropRect.y + cropRect.h)) < s) return "br";
-
-        // Перевірка сторін
-        if (Math.abs(my - cropRect.y) < s && mx > cropRect.x && mx < cropRect.x + cropRect.w) return "t";
-        if (Math.abs(my - (cropRect.y + cropRect.h)) < s && mx > cropRect.x && mx < cropRect.x + cropRect.w) return "b";
-        if (Math.abs(mx - cropRect.x) < s && my > cropRect.y && my < cropRect.y + cropRect.h) return "l";
-        if (Math.abs(mx - (cropRect.x + cropRect.w)) < s && my > cropRect.y && my < cropRect.y + cropRect.h) return "r";
-
-        // Перевірка середини (перетягування всієї рамки)
-        if (mx > cropRect.x && mx < cropRect.x + cropRect.w && my > cropRect.y && my < cropRect.y + cropRect.h) return "center";
-
+        const s = 15;
+        const {x, y, w, h} = cropRect;
+        if (Math.abs(mx-x)<s && Math.abs(my-y)<s) return "tl";
+        if (Math.abs(mx-(x+w))<s && Math.abs(my-y)<s) return "tr";
+        if (Math.abs(mx-x)<s && Math.abs(my-(y+h))<s) return "bl";
+        if (Math.abs(mx-(x+w))<s && Math.abs(my-(y+h))<s) return "br";
+        if (Math.abs(my-y)<s && mx>x && mx<x+w) return "t";
+        if (Math.abs(my-(y+h))<s && mx>x && mx<x+w) return "b";
+        if (Math.abs(mx-x)<s && my>y && my<y+h) return "l";
+        if (Math.abs(mx-(x+w))<s && my>y && my<y+h) return "r";
+        if (mx>x && mx<x+w && my>y && my<y+h) return "center";
         return null;
     }
 
-    canvasCrop.addEventListener("mousedown", e => {
+    canvasCrp.addEventListener("mousedown", e => {
         if (!cropMode) return;
-        const mx = e.offsetX, my = e.offsetY;
-        const part = getInteractionPart(mx, my);
-
+        const part = getPart(e.offsetX, e.offsetY);
         if (!part) return;
-
-        if (part === "center") {
-            dragWhole = true;
-            dragOffset = { x: mx - cropRect.x, y: my - cropRect.y };
-        } else {
-            dragPart = part;
-        }
-        dragging = true;
+        dragPart = part; dragging = true;
+        dragOffset = { x: e.offsetX - cropRect.x, y: e.offsetY - cropRect.y };
     });
 
     window.addEventListener("mousemove", e => {
         const mx = e.offsetX, my = e.offsetY;
-
-        // Зміна курсора
         if (cropMode && !dragging) {
-            const hoverPart = getInteractionPart(mx, my);
-            if (hoverPart === "tl" || hoverPart === "br") canvasCrop.style.cursor = "nwse-resize";
-            else if (hoverPart === "tr" || hoverPart === "bl") canvasCrop.style.cursor = "nesw-resize";
-            else if (hoverPart === "t" || hoverPart === "b") canvasCrop.style.cursor = "ns-resize";
-            else if (hoverPart === "l" || hoverPart === "r") canvasCrop.style.cursor = "ew-resize";
-            else if (hoverPart === "center") canvasCrop.style.cursor = "move";
-            else canvasCrop.style.cursor = "default";
+            const p = getPart(mx, my);
+            const cursors = { tl:"nwse-resize", br:"nwse-resize", tr:"nesw-resize", bl:"nesw-resize", t:"ns-resize", b:"ns-resize", l:"ew-resize", r:"ew-resize", center:"move" };
+            canvasCrp.style.cursor = cursors[p] || "default";
         }
-
-        if (!dragging || !cropMode) return;
-
-        if (dragWhole) {
-            cropRect.x = mx - dragOffset.x;
-            cropRect.y = my - dragOffset.y;
-        } else if (dragPart) {
-            const minSize = 10;
-            // Логіка для сторін та кутів
-            if (dragPart.includes("t")) {
-                let diff = cropRect.y - my;
-                if(cropRect.h + diff > minSize) { cropRect.h += diff; cropRect.y = my; }
-            }
-            if (dragPart.includes("b")) {
-                cropRect.h = Math.max(minSize, my - cropRect.y);
-            }
-            if (dragPart.includes("l")) {
-                let diff = cropRect.x - mx;
-                if(cropRect.w + diff > minSize) { cropRect.w += diff; cropRect.x = mx; }
-            }
-            if (dragPart.includes("r")) {
-                cropRect.w = Math.max(minSize, mx - cropRect.x);
-            }
+        if (!dragging) return;
+        const min = 10;
+        if (dragPart === "center") {
+            cropRect.x = mx - dragOffset.x; cropRect.y = my - dragOffset.y;
+        } else {
+            if (dragPart.includes("t")) { let d = cropRect.y - my; if(cropRect.h+d>min){ cropRect.h+=d; cropRect.y=my; } }
+            if (dragPart.includes("b")) cropRect.h = Math.max(min, my - cropRect.y);
+            if (dragPart.includes("l")) { let d = cropRect.x - mx; if(cropRect.w+d>min){ cropRect.w+=d; cropRect.x=mx; } }
+            if (dragPart.includes("r")) cropRect.w = Math.max(min, mx - cropRect.x);
         }
-        drawCrop();
+        drawCropFrame();
     });
 
-    window.addEventListener("mouseup", () => {
-        dragging = false; dragPart = null; dragWhole = false;
+    window.addEventListener("mouseup", () => { dragging = false; });
+
+    invertBtn.addEventListener("click", () => {
+        isInverted = !isInverted; invertBtn.classList.toggle("active", isInverted); drawMain();
     });
 
-    // Решта логіки (завантаження файлів, кнопки) залишається незмінною
-    function handleFile(file) {
-        if (!file) return;
+    cropBtn.addEventListener("click", () => {
+        if (!currentCoords) return;
+        cropMode = true; cropRect = { ...currentCoords };
+        [confirmBtn, cancelBtn].forEach(b => b.style.display = "inline");
+        alignBtns.forEach(b => b.style.display = "inline");
+        drawCropFrame();
+    });
+
+    confirmBtn.addEventListener("click", () => {
+        const uPx = getUnitsPerPx();
+        if (currentImg) {
+            const sw = cropRect.w * uPx, sh = cropRect.h * uPx;
+            const temp = document.createElement("canvas");
+            temp.width = sw; temp.height = sh;
+            const tCtx = temp.getContext("2d");
+            const sx = (cropRect.x - currentCoords.x) * uPx, sy = (cropRect.y - currentCoords.y) * uPx;
+            tCtx.drawImage(originalImg, sx, sy, sw, sh, 0, 0, sw, sh);
+            if (isInverted) { tCtx.globalCompositeOperation = "difference"; tCtx.fillStyle="white"; tCtx.fillRect(0,0,sw,sh); }
+            const img = new Image(); img.src = temp.toDataURL();
+            img.onload = () => { originalImg = img; currentImg = img; isInverted = false; invertBtn.classList.remove("active"); exit(); };
+        } else {
+            pdfViewBox.x += (cropRect.x - currentCoords.x) * uPx;
+            pdfViewBox.y += (cropRect.y - currentCoords.y) * uPx;
+            pdfViewBox.w = cropRect.w * uPx; pdfViewBox.h = cropRect.h * uPx;
+            exit();
+        }
+    });
+
+    function exit() {
+        cropMode = false; [confirmBtn, cancelBtn].forEach(b => b.style.display = "none");
+        alignBtns.forEach(b => b.style.display = "none");
+        ctxCrp.clearRect(0,0,canvasCrp.width/dpr, canvasCrp.height/dpr);
+        drawMain();
+    }
+
+    cancelBtn.addEventListener("click", exit);
+
+    fileInput.addEventListener("change", e => {
+        const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
         if (file.type === "application/pdf") {
-            reader.onload = async (e) => {
-                pdfDoc = await pdfjsLib.getDocument({data: e.target.result}).promise;
+            reader.onload = async (ev) => {
+                pdfDoc = await pdfjsLib.getDocument({data: ev.target.result}).promise;
                 pdfPage = await pdfDoc.getPage(1);
-                currentImage = null;
                 const vp = pdfPage.getViewport({scale: 1});
                 pdfViewBox = { x: 0, y: 0, w: vp.width, h: vp.height };
-                drawImageLayer();
+                currentImg = null; drawMain();
             };
             reader.readAsArrayBuffer(file);
         } else {
             const img = new Image();
-            img.onload = () => {
-                originalImage = img; currentImage = img; pdfPage = null;
-                drawImageLayer();
-            };
+            img.onload = () => { originalImg = img; currentImg = img; pdfPage = null; drawMain(); };
             img.src = URL.createObjectURL(file);
         }
-    }
-
-    fileInput.addEventListener("change", e => handleFile(e.target.files[0]));
-
-    cropBtn.addEventListener("click", () => {
-        if (!currentImageCoords) return;
-        cropMode = true;
-        cropRect = { ...currentImageCoords };
-        confirmBtn.style.display = "inline";
-        cancelBtn.style.display = "inline";
-        alignBtns.forEach(b => b.style.display = "inline");
-        drawCrop();
     });
 
-    confirmBtn.addEventListener("click", async () => {
-        if (currentImage) {
-            const unitsPerPx = getUnitsPerPixel();
-            const sx = (cropRect.x - currentImageCoords.x) * unitsPerPx;
-            const sy = (cropRect.y - currentImageCoords.y) * unitsPerPx;
-            const sw = cropRect.w * unitsPerPx, sh = cropRect.h * unitsPerPx;
-            const tempCanvas = document.createElement("canvas");
-            tempCanvas.width = sw; tempCanvas.height = sh;
-            tempCanvas.getContext("2d").drawImage(originalImage, sx, sy, sw, sh, 0, 0, sw, sh);
-            const newImg = new Image();
-            newImg.src = tempCanvas.toDataURL();
-            newImg.onload = () => { currentImage = newImg; originalImage = newImg; exitCrop(); };
-        } else if (pdfPage) {
-            const unitsPerPx = getUnitsPerPixel();
-            pdfViewBox.x += (cropRect.x - currentImageCoords.x) * unitsPerPx;
-            pdfViewBox.y += (cropRect.y - currentImageCoords.y) * unitsPerPx;
-            pdfViewBox.w = cropRect.w * unitsPerPx;
-            pdfViewBox.h = cropRect.h * unitsPerPx;
-            exitCrop();
-        }
-    });
-
-    function exitCrop() {
-        cropMode = false;
-        confirmBtn.style.display = "none";
-        cancelBtn.style.display = "none";
-        alignBtns.forEach(b => b.style.display = "none");
-        ctxCrop.clearRect(0, 0, canvasCrop.width/dpr, canvasCrop.height/dpr);
-        canvasCrop.style.cursor = "default";
-        drawImageLayer();
+    function resize() {
+        const w = window.innerWidth, h = window.innerHeight;
+        [canvasImg, canvasCrp].forEach(c => {
+            c.style.width = w+"px"; c.style.height = h+"px";
+            c.width = w*dpr; c.height = h*dpr;
+        });
+        ctxImg.setTransform(dpr,0,0,dpr,0,0); ctxCrp.setTransform(dpr,0,0,dpr,0,0);
+        drawMain(); if(cropMode) drawCropFrame();
     }
-
-    cancelBtn.addEventListener("click", exitCrop);
+    window.addEventListener("resize", resize);
+    resize();
 </script>
 </body>
 </html>
