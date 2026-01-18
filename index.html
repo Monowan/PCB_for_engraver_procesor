@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>Vector PDF Master - Precision Preview</title>
+    <title>Vector PDF Master - Final</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
     <style>
@@ -20,7 +20,7 @@
         button { padding: 6px 14px; cursor: pointer; border-radius: 4px; border: 1px solid #999; background: white; font-weight: bold; }
         #confirmBtn { background: #4CAF50; color: white; border: none; }
         #cancelBtn { background: #f44336; color: white; border: none; }
-        .export-btn { background: #FF9800; color: white; border: none; }
+        .export-btn { background: #FF9800; color: white; border: none; min-width: 60px; }
         .round-tool { background: #2196F3; color: white; border: none; min-width: 35px; }
         #invertBtn.active { background: #263238; color: white; }
 
@@ -57,8 +57,8 @@
 <div id="infoToolbar"><span id="sizeDisplay" style="font-weight:bold;">0 x 0 мм</span></div>
 
 <div id="exportToolbar">
-    <button id="exportPngBtn" class="export-btn">PNG 1500 DPI</button>
-    <button id="exportPdfBtn" class="export-btn" style="background: #2196F3;">PDF Експорт</button>
+    <button id="exportPngBtn" class="export-btn">PNG</button>
+    <button id="exportPdfBtn" class="export-btn" style="background: #2196F3;">PDF</button>
 </div>
 
 <canvas id="canvasImage"></canvas>
@@ -113,22 +113,15 @@
         await fullDraw();
     };
 
-    // --- ВИПРАВЛЕНО: ІНВЕРСІЯ ТІЛЬКИ В МЕЖАХ РАМКИ ---
     function fastRedraw() {
         if (!currentCoords) return;
         const {dx, dy, dw, dh} = currentCoords;
         const w = window.innerWidth, h = window.innerHeight;
-
-        // Очищаємо весь канвас
         ctxImg.clearRect(0, 0, w * dpr, h * dpr);
-
         ctxImg.save();
-        // Створюємо шлях обрізки (clip) точно по межах документа
         ctxImg.beginPath();
         ctxImg.rect(dx, dy, dw, dh);
         ctxImg.clip();
-
-        // Застосовуємо фільтр тільки до обрізаної області
         ctxImg.filter = "url(#docFilter)";
         ctxImg.drawImage(cacheCanvas, 0, 0, w, h);
         ctxImg.restore();
@@ -167,7 +160,6 @@
         updateSizeLabel();
     }
 
-    // --- КРОП ЛОГІКА ---
     function getPart(mx, my) {
         if (!cropRect) return null;
         const {x, y, w, h} = cropRect; const s = 10;
@@ -260,7 +252,6 @@
         document.getElementById("cancelBtn").click(); await fullDraw();
     };
 
-    // --- ЕКСПОРТ (БЕЗ ЗМІН) ---
     async function getProcessedCanvas(targetDPI) {
         const exportScale = targetDPI / 72;
         const rW = (originalImg ? originalImg.width * (targetDPI/96) : pdfViewBox.w * exportScale);
@@ -317,7 +308,7 @@
 
     document.getElementById("exportPngBtn").onclick = async () => {
         const out = await getProcessedCanvas(1500);
-        const a = document.createElement("a"); a.download = "export_1500dpi.png";
+        const a = document.createElement("a"); a.download = "export.png";
         a.href = out.toDataURL("image/png"); a.click();
     };
 
@@ -327,7 +318,7 @@
         const pngImg = await pdfDoc.embedPng(out.toDataURL("image/png"));
         const page = pdfDoc.addPage([pdfViewBox.w, pdfViewBox.h]);
         page.drawImage(pngImg, { x: 0, y: 0, width: pdfViewBox.w, height: pdfViewBox.h });
-        const a = document.createElement("a"); a.download = "processed.pdf";
+        const a = document.createElement("a"); a.download = "export.pdf";
         a.href = URL.createObjectURL(new Blob([await pdfDoc.save()])); a.click();
     };
 
