@@ -215,6 +215,10 @@
       <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h8M8 18h8M6 8v8M18 8v8"/></svg>
       <span>Компоненти</span>
     </button>
+    <button class="rail-btn" data-tool="export" title="Експорт PNG / PDF (E)">
+      <svg viewBox="0 0 24 24"><path d="M12 19V7"/><path d="M7 12l5-5 5 5"/><path d="M4 4h16"/></svg>
+      <span>Експорт</span>
+    </button>
     <div class="rail-sep"></div>
     <button class="rail-btn" id="undoBtn" title="Скасувати останню дію (Ctrl+Z)" disabled>
       <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
@@ -849,7 +853,7 @@ const toolButtons = [...document.querySelectorAll(".rail-btn[data-tool]")];
 toolButtons.forEach(b => b.onclick = () => switchTool(b.dataset.tool));
 
 function switchTool(name) {
-  if (!["import","crop","perspective","scale","detect"].includes(name)) return;
+  if (!["import","crop","perspective","scale","detect","export"].includes(name)) return;
   tool = name;
   toolButtons.forEach(b => b.classList.toggle("active", b.dataset.tool === name));
   document.querySelectorAll(".pane").forEach(p =>
@@ -1829,6 +1833,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "p" || e.key === "P") switchTool("perspective");
   if (e.key === "s" || e.key === "S") switchTool("scale");
   if (e.key === "d" || e.key === "D") switchTool("detect");
+  if (e.key === "e" || e.key === "E") switchTool("export");
   if (e.key === "Escape") {
     twoPoints = [];
     if (pendingComponent) {
