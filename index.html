@@ -1528,13 +1528,20 @@ document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
     const type = btn.dataset.round;
     const lock = document.getElementById("scaleLock").checked;
 
-    // Reference size: what the user typed, otherwise the current image size.
     const wEl = document.getElementById("scaleW");
     const hEl = document.getElementById("scaleH");
+    // The true size of the bitmap, not the value shown in the input. The field
+    // is display-rounded (125.94 -> "125.9"), so using it would round 125.94
+    // down to 125 instead of up to 126.
     const mmW = doc.canvas.width / doc.pxPerMm;
     const mmH = doc.canvas.height / doc.pxPerMm;
+
+    // Reference width: only trust the field when it differs from what the
+    // bitmap really is, i.e. the user actually typed something new.
     const typedW = parseFloat(wEl.value);
-    const refW = typedW > 0 ? typedW : mmW;
+    const fieldW = Math.round(mmW * 10) / 10;   // how fmtNum would show it
+    const userTyped = typedW > 0 && Math.abs(typedW - fieldW) > 1e-9;
+    const refW = userTyped ? typedW : mmW;
 
     const tW = Math.max(1, roundValue(refW, type));
     const tH = lock
@@ -1569,12 +1576,15 @@ function scaleToExactSize(mmW, mmH) {
   // reads back as 169.07 mm and the tenths come right back.
   // Snap px/mm to an integer, but only when it barely matters visually, and
   // rebuild the bitmap so the physical size is preserved.
+  // Rounding works in whole millimetres, so the calibration must allow a whole
+  // number of pixels per millimetre. With 96 DPI (3.7795 px/mm) a 200 mm height
+  // becomes 756 px and reads back as 200.02 mm. Snap px/mm to an integer and
+  // keep the physical size, so typed integers stay integers.
   let ppm = doc.pxPerMm;
-  const wholeW = Math.round(mmW), wholeH = Math.round(mmH);
-  const isWhole = Math.abs(mmW - wholeW) < 1e-9 && Math.abs(mmH - wholeH) < 1e-9;
-  if (isWhole && Math.abs(ppm - Math.round(ppm)) > 1e-9) {
+  const wholeW = Math.abs(mmW - Math.round(mmW)) < 1e-9;
+  const wholeH = Math.abs(mmH - Math.round(mmH)) < 1e-9;
+  if ((wholeW || wholeH) && Math.abs(ppm - Math.round(ppm)) > 1e-9) {
     const snapped = Math.max(1, Math.round(ppm));
-    // remap the source so the board keeps its real size at the new scale
     const preW = clamp(Math.round(doc.canvas.width * snapped / ppm), 1, 20000);
     const preH = clamp(Math.round(doc.canvas.height * snapped / ppm), 1, 20000);
     const pre = document.createElement("canvas");
@@ -1661,6 +1671,15 @@ document.getElementById("scaleWhApply").onclick = () => {
     if (!(wIn > 0) && !(hIn > 0)) { toast("Введіть хоча б один розмір"); return; }
   }
   if (!(tW > 0) || !(tH > 0)) { toast("Розмір має бути більше нуля"); return; }
+
+  // Only one dimension was typed: the other keeps the current size exactly,
+  // not the value displayed in its field (which is rounded for reading).
+  if (lock) {
+    if (wIn > 0) { tW = wIn; tH = wIn * aspect; }
+  } else {
+    if (!(wIn > 0)) tW = doc.canvas.width / doc.pxPerMm;
+    if (!(hIn > 0)) tH = doc.canvas.height / doc.pxPerMm;
+  }
 
   const res = scaleToExactSize(tW, tH);
   syncScaleFields();
