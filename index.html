@@ -144,6 +144,7 @@
   #binModeRow .btn.active-mode,
   #paintModeRow .btn.active-mode,
   #paintShapeRow .btn.active-mode,
+  #paintViewRow .btn.active-mode,
   #paintColorRow .btn.active-mode {
     background: var(--accent); color: #fff; border-color: var(--accent);
   }
@@ -584,6 +585,20 @@
 
         <label class="chk"><input type="checkbox" id="paintSnap"> Вирівнювати лінію по осях (Shift)</label>
 
+        <div class="field">
+          <label>Перегляд</label>
+          <div class="row2" id="paintViewRow">
+            <button class="btn round-btn" data-paintview="edit" title="Малювати по результату">Результат</button>
+            <button class="btn round-btn" data-paintview="photo" title="Дивитись оригінал">Оригінал</button>
+          </div>
+          <div class="slider-row" style="margin-top:8px">
+            <span style="font-size:11px;color:var(--muted);min-width:64px">Прозорість</span>
+            <input type="range" id="paintGhost" min="0" max="100" step="5" value="50">
+            <output id="paintGhostVal">50%</output>
+          </div>
+          <p class="hint" style="margin:6px 0 0">Оригінал показує фото під бітмапом. Прозорість — скільки видно результат: 0 % = тільки фото, 100 % = тільки результат.</p>
+        </div>
+
         <div class="field" style="margin-top:14px">
           <label>Пороговий шар <span style="text-transform:none;font-weight:400">(для заливки)</span></label>
           <div class="slider-row">
@@ -731,8 +746,27 @@ function render() {
   ctxImg.imageSmoothingEnabled = true;
   ctxImg.imageSmoothingQuality = "high";
   ctxImg.filter = "url(#docFilter)";
+
+  // In paint mode the original photo can sit UNDER the bitmap at a chosen
+  // opacity: ghosting the result over the photo is the only practical way to
+  // see whether a manual fix actually matches the board.
+  const ghosting = tool === "paint" && paint.view === "photo";
+  if (ghosting) {
+    // Use origCanvas, NOT doc.base: `base` is the working reference and by the
+    // time the user opens the painter it may already hold the binarized
+    // bitmap, so ghosting it over itself would show nothing.
+    const src = doc.origCanvas && doc.origCanvas.width ? doc.origCanvas : doc.base;
+    const a = clamp(paint.ghost / 100, 0, 1);
+    if (src && src.width) {
+      ctxImg.drawImage(src, view.x, view.y,
+        src.width * view.scale, src.height * view.scale);
+    }
+    ctxImg.globalAlpha = a;
+  }
+
   ctxImg.drawImage(doc.canvas, view.x, view.y,
     doc.canvas.width * view.scale, doc.canvas.height * view.scale);
+  ctxImg.globalAlpha = 1;
   ctxImg.restore();
 
   drawOverlay();
@@ -870,6 +904,7 @@ function drawToolLayer() {
   if (!doc) return;
 
   if (tool === "paint" && paint.draft) paintDrawDraft();
+  if (tool === "paint" && paint.hover) paintDrawBrushRing();
 
   if (tool === "crop" && cropRect) {
     const a = imgToScreen(cropRect.x, cropRect.y);
@@ -1203,7 +1238,7 @@ toolButtons.forEach(b => b.onclick = () => switchTool(b.dataset.tool));
 function switchTool(name) {
   if (!["import","crop","perspective","scale","detect","binary","paint","export"].includes(name)) return;
   // leaving the painter mid-stroke must not leave a dangling draft
-  if (tool === "paint" && name !== "paint") paint.draft = null;
+  if (tool === "paint" && name !== "paint") { paint.draft = null; paint.hover = null; }
   tool = name;
   toolButtons.forEach(b => b.classList.toggle("active", b.dataset.tool === name));
   document.querySelectorAll(".pane").forEach(p =>
@@ -1458,10 +1493,13 @@ function onMove(e) {
     } else if (tool === "binary") {
       setCursor(binState.picking ? "crosshair" : "default");
     } else if (tool === "paint") {
+      // keep the brush ring glued to the cursor and redraw the overlay only
+      paint.hover = { x: ip.x, y: ip.y };
+      drawToolLayer();
       if (e.altKey) setCursor("copy");
       else if (paint.mode === "fill") setCursor("copy");
       else if (paint.mode === "erase") setCursor("cell");
-      else setCursor("crosshair");
+      else setCursor("none");
     }
     return;
   }
@@ -3048,6 +3086,9 @@ const paint = {
   level: 128,       // fill tolerance / "only paint bad" cut-off
   onlyBad: false,   // paint only where luminance is on the wrong side
   snap: false,      // keep lines on the axis
+  view: "edit",     // edit = bitmap only | photo = original visible
+  ghost: 50,        // 0..100: opacity of the bitmap over the photo
+  hover: null,      // {x,y} image coords of the brush ring preview
   draft: null,      // { kind:'stroke'|'line', pts|from,to } drawn on the overlay
 };
 
@@ -3248,6 +3289,41 @@ function paintCommitDraft(pts) {
   render();
 }
 
+// Brush-size ring under the cursor, in SCREEN pixels so it always matches
+// what the stroke will actually cover after the zoom is applied.
+function paintDrawBrushRing() {
+  const h = paint.hover;
+  if (!doc || !h) return;
+  const s = imgToScreen(h.x, h.y);
+  const rScreen = Math.max(2, paintRadius() * view.scale);
+  ctxTls.save();
+  // two rings: dark underneath, light on top, so the outline stays visible
+  // on white traces and on the black background alike
+  ctxTls.lineWidth = 3;
+  ctxTls.strokeStyle = "rgba(0,0,0,.55)";
+  if (paint.shape === "square") {
+    ctxTls.strokeRect(s.x - rScreen, s.y - rScreen, rScreen * 2, rScreen * 2);
+    ctxTls.lineWidth = 1;
+    ctxTls.strokeStyle = "rgba(255,255,255,.95)";
+    ctxTls.strokeRect(s.x - rScreen, s.y - rScreen, rScreen * 2, rScreen * 2);
+  } else {
+    ctxTls.beginPath();
+    ctxTls.arc(s.x, s.y, rScreen, 0, Math.PI * 2);
+    ctxTls.stroke();
+    ctxTls.lineWidth = 1;
+    ctxTls.strokeStyle = "rgba(255,255,255,.95)";
+    ctxTls.beginPath();
+    ctxTls.arc(s.x, s.y, rScreen, 0, Math.PI * 2);
+    ctxTls.stroke();
+  }
+  // a centre dot makes the exact target pixel readable at any size
+  ctxTls.beginPath();
+  ctxTls.arc(s.x, s.y, 1.5, 0, Math.PI * 2);
+  ctxTls.fillStyle = paintColorValue() ? "rgba(255,255,255,.95)" : "rgba(0,0,0,.85)";
+  ctxTls.fill();
+  ctxTls.restore();
+}
+
 // Live stroke preview on the overlay (so the bitmap is untouched mid-drag).
 function paintDrawDraft() {
   const d = paint.draft;
@@ -3291,6 +3367,7 @@ function paintSetShape(s) {
   paint.shape = s;
   document.querySelectorAll("#paintShapeRow .btn").forEach(b =>
     b.classList.toggle("active-mode", b.dataset.paintshape === s));
+  if (tool === "paint") drawToolLayer();
 }
 function paintSetColor(v) {
   paint.value = v;
@@ -3313,11 +3390,13 @@ document.querySelectorAll("[data-paintpreset]").forEach(b => b.onclick = () => {
   document.getElementById("paintSize").value = v;
   document.getElementById("paintSizeVal").textContent = v;
   paint.size = v;
+  if (tool === "paint") drawToolLayer();
 });
 
 document.getElementById("paintSize").oninput = (e) => {
   paint.size = +e.target.value;
   document.getElementById("paintSizeVal").textContent = e.target.value;
+  if (tool === "paint") drawToolLayer();
 };
 document.getElementById("paintLevel").oninput = (e) => {
   paint.level = +e.target.value;
@@ -3326,6 +3405,22 @@ document.getElementById("paintLevel").oninput = (e) => {
 document.getElementById("paintThresh").onchange = (e) => { paint.onlyBad = e.target.checked; };
 document.getElementById("paintSnap").onchange = (e) => { paint.snap = e.target.checked; };
 document.getElementById("paintUndo").onclick = paintUndoLast;
+
+function paintSetView(v) {
+  paint.view = v;
+  document.querySelectorAll("#paintViewRow .btn").forEach(b =>
+    b.classList.toggle("active-mode", b.dataset.paintview === v));
+  document.getElementById("paintGhost").disabled = (v !== "photo");
+  render();
+}
+document.querySelectorAll("#paintViewRow .btn").forEach(b =>
+  b.onclick = () => paintSetView(b.dataset.paintview));
+document.getElementById("paintGhost").oninput = (e) => {
+  paint.ghost = +e.target.value;
+  document.getElementById("paintGhostVal").textContent = e.target.value + "%";
+  render();
+};
+paintSetView("edit");
 
 /* ============================================================
    GLOBAL UI WIRING
