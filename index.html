@@ -177,6 +177,13 @@
   #cornerSize.show { display: block; }
   #cornerSize .cs-main { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
   #cornerSize .cs-sub { font-size: 11px; opacity: .78; font-variant-numeric: tabular-nums; }
+  #cornerSize .cs-row { display: flex; align-items: baseline; gap: 8px; }
+  #cornerSize .cs-tag {
+    font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.16); opacity: .9;
+  }
+  #cornerSize .cs-main.cs-frame { color: #ffd166; }
+  #cornerSize .cs-main.cs-other { color: #93c5fd; font-weight: 700; }
 
   @media (max-width: 780px) {
     #sidePanel { width: 240px; flex-basis: 240px; }
@@ -250,7 +257,11 @@
       <p>або натисніть кнопку «Відкрити файл» праворуч</p>
     </div>
 
-    <div id="cornerSize"><div class="cs-main">— × —</div><div class="cs-sub"></div></div>
+    <div id="cornerSize">
+      <div class="cs-row"><span class="cs-tag" id="csTagImg">зобр.</span><span class="cs-main" id="csImg">— × —</span></div>
+      <div class="cs-sub" id="csImgSub"></div>
+      <div class="cs-row" id="csFrameRow" style="display:none"><span class="cs-tag">рамка</span><span class="cs-main cs-frame" id="csFrame">— × —</span></div>
+    </div>
 
     <div id="toast"></div>
   </div>
@@ -787,14 +798,18 @@ function updateSizeLabel() {
   const sizeEl = document.getElementById("sizeDisplay");
   const dpiEl  = document.getElementById("dpiDisplay");
   const cornerEl = document.getElementById("cornerSize");
-  const cornerMain = cornerEl.querySelector(".cs-main");
-  const cornerSub  = cornerEl.querySelector(".cs-sub");
+  const cornerMain = document.getElementById("csImg");
+  const cornerSub  = document.getElementById("csImgSub");
+  const frameRow   = document.getElementById("csFrameRow");
+  const frameVal   = document.getElementById("csFrame");
+  const tagImg     = document.getElementById("csTagImg");
 
   if (!doc) {
     sizeEl.textContent = "— × —"; dpiEl.textContent = "Масштаб: не визначено";
     cornerEl.classList.remove("show");
     cornerMain.textContent = "— × —";
     cornerSub.textContent = "";
+    if (frameRow) frameRow.style.display = "none";
     return;
   }
 
@@ -812,15 +827,20 @@ function updateSizeLabel() {
     cornerSub.textContent = "Масштаб не визначено";
   }
 
-  // context sub-line: live crop frame / zoom
-  const zoom = `${Math.round(view.scale * 100)}%`;
-  if (cropRect && tool === "crop") {
-    cornerSub.textContent =
-      (doc.pxPerMm
+  // zoom goes into the image sub-line; the crop frame gets its own row,
+  // so the actual image size and the frame size are never confused.
+  cornerSub.textContent = cornerSub.textContent + ` · ${Math.round(view.scale * 100)}%`;
+
+  const showFrame = !!(cropRect && tool === "crop");
+  if (frameRow && frameVal) {
+    frameRow.style.display = showFrame ? "flex" : "none";
+    if (showFrame) {
+      frameVal.textContent = doc.pxPerMm
         ? `${fmtUnit(cropRect.w)} × ${fmtUnit(cropRect.h)}`
-        : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`) + ` · рамка`;
+        : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`;
+    }
   }
-  cornerSub.textContent = cornerSub.textContent + ` · ${zoom}`;
+  if (tagImg) tagImg.textContent = doc.pxPerMm ? "зобр." : "px";
   cornerEl.classList.add("show");
 
   if (cropRect && tool === "crop" && document.querySelector('.pane[data-pane="crop"]').classList.contains("active")) {
@@ -1405,7 +1425,7 @@ document.querySelectorAll('.pane[data-pane="crop"] .round-btn').forEach(btn => {
     cropRect.h = Math.min(tH * doc.pxPerMm, doc.canvas.height - cropRect.y);
     drawToolLayer();
     updateSizeLabel();
-    toast(`Рамка: ${(cropRect.w / doc.pxPerMm).toFixed(0)} × ${(cropRect.h / doc.pxPerMm).toFixed(0)} мм`);
+    toast(`Рамка: ${(cropRect.w / doc.pxPerMm).toFixed(2)} × ${(cropRect.h / doc.pxPerMm).toFixed(2)} мм`, 2400);
   };
 });
 
@@ -1437,7 +1457,7 @@ document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
 
     // apply immediately: rescale the bitmap to exactly tW x tH mm
     scaleToExactSize(tW, tH);
-    toast(`Зображення: ${tW} × ${tH} мм`, 2200);
+    toast(`Фактично: ${actualSizeText()}`, 2600);
   };
 });
 
@@ -1461,6 +1481,15 @@ function scaleToExactSize(mmW, mmH) {
   fitToView();
   render();
   return { w: out.width, h: out.height };
+}
+
+// Human-readable "what the bitmap really is now" summary, taken from the
+// canvas itself (never from the input fields).
+function actualSizeText() {
+  if (!doc) return "—";
+  const w = doc.canvas.width, h = doc.canvas.height;
+  if (!doc.pxPerMm) return `${w} × ${h} px`;
+  return `${fmtUnit(w)} × ${fmtUnit(h)}`;
 }
 
 function scaleCanvasTo(pxPerMm) {
@@ -1500,7 +1529,10 @@ document.getElementById("scaleWhApply").onclick = () => {
     if (!(wIn > 0) || !(hIn > 0)) { toast("Введіть обидва розміри"); return; }
     scaleToExactSize(wIn, hIn);
   }
-  toast("Масштаб застосовано");
+  // report the real result, not the typed one
+  document.getElementById("scaleH").value = (doc.canvas.height / doc.pxPerMm).toFixed(2);
+  document.getElementById("scaleW").value = (doc.canvas.width / doc.pxPerMm).toFixed(2);
+  toast(`Фактично: ${actualSizeText()}`);
 };
 
 document.getElementById("scaleTwoApply").onclick = () => {
