@@ -637,6 +637,46 @@ function drawOverlay() {
       drawMarkers(c, false);
     });
     if (pendingComponent) drawMarkers(pendingComponent, true);
+
+    // live preview of the hole under the cursor
+    if (pendingComponent && pendingComponent.pickType !== "point" && holePreview) {
+      const s = imgToScreen(holePreview.x, holePreview.y);
+      const rs = Math.max(3, holePreview.r * view.scale);
+      ctxOvl.save();
+      ctxOvl.beginPath();
+      ctxOvl.arc(s.x, s.y, rs, 0, Math.PI * 2);
+      ctxOvl.fillStyle = "rgba(16,185,129,.22)";
+      ctxOvl.fill();
+      ctxOvl.strokeStyle = "#10b981";
+      ctxOvl.lineWidth = 2;
+      ctxOvl.stroke();
+      // centre dot + crosshair
+      ctxOvl.beginPath();
+      ctxOvl.arc(s.x, s.y, 2.5, 0, Math.PI * 2);
+      ctxOvl.fillStyle = "#059669";
+      ctxOvl.fill();
+      ctxOvl.beginPath();
+      ctxOvl.moveTo(s.x - rs - 5, s.y); ctxOvl.lineTo(s.x - rs - 1, s.y);
+      ctxOvl.moveTo(s.x + rs + 1, s.y); ctxOvl.lineTo(s.x + rs + 5, s.y);
+      ctxOvl.moveTo(s.x, s.y - rs - 5); ctxOvl.lineTo(s.x, s.y - rs - 1);
+      ctxOvl.moveTo(s.x, s.y + rs + 1); ctxOvl.lineTo(s.x, s.y + rs + 5);
+      ctxOvl.lineWidth = 1.5;
+      ctxOvl.stroke();
+      // radius label in image px, shown in mm once the scale is known
+      const label = doc.pxPerMm
+        ? `Ø${(holePreview.r * 2 / doc.pxPerMm).toFixed(2)} мм`
+        : `r ${holePreview.r.toFixed(1)} px`;
+      ctxOvl.font = "bold 11px sans-serif";
+      ctxOvl.textAlign = "left";
+      ctxOvl.textBaseline = "middle";
+      const tx = s.x + rs + 8, ty = s.y - rs - 8;
+      ctxOvl.fillStyle = "rgba(6,78,59,.9)";
+      const tw = ctxOvl.measureText(label).width;
+      ctxOvl.fillRect(tx - 3, ty - 8, tw + 6, 16);
+      ctxOvl.fillStyle = "#ecfdf5";
+      ctxOvl.fillText(label, tx, ty);
+      ctxOvl.restore();
+    }
   }
 }
 
@@ -1098,6 +1138,8 @@ function onMove(e) {
       setCursor("crosshair");
     } else if (tool === "detect") {
       setCursor(pendingComponent ? "crosshair" : "default");
+      // live hole preview: highlight the circle under the cursor before clicking
+      if (pendingComponent && pendingComponent.pickType !== "point") updateHolePreview(ip);
     }
     return;
   }
@@ -1517,6 +1559,24 @@ let components = [];
 let pendingComponent = null;    // component being placed (awaiting clicks)
 let hoverImgPt = null;
 let lastSnap = null;            // result of the last hole snap (for feedback)
+let holePreview = null;         // live circle under the cursor while placing
+let holePreviewJob = 0;
+
+// Live preview: snap on hover (throttled) so the detected circle and its
+// centre light up before the user commits the click.
+function updateHolePreview(ip) {
+  const job = ++holePreviewJob;
+  // run the flood fill on the next frame, max ~every 40 ms
+  if (updateHolePreview._t) return;
+  updateHolePreview._t = setTimeout(() => {
+    updateHolePreview._t = null;
+    if (job !== holePreviewJob || !pendingComponent) return;
+    const s = snapToHole(ip);
+    holePreview = s || null;
+    drawOverlay();
+    drawToolLayer();
+  }, 40);
+}
 
 /* ---------------- automatic hole detection ---------------- */
 // The user clicks roughly inside a hole; we flood-fill the region of similar
@@ -1714,6 +1774,9 @@ function handleComponentClick(ip) {
     if (s) { pt = { x: s.x, y: s.y, r: s.r }; snapped = s; }
   }
   lastSnap = snapped;
+  // the click consumed the preview; hide it until the pointer moves again
+  holePreview = null;
+  holePreviewJob++;
 
   // reject a duplicate click on the same hole
   const dup = c.clicks.find(q => Math.hypot(q.x - pt.x, q.y - pt.y) < Math.max(2, (pt.r || 3) * 0.8));
@@ -2107,6 +2170,8 @@ window.addEventListener("keydown", (e) => {
     twoPoints = [];
     if (pendingComponent) {
       pendingComponent = null;
+      holePreview = null;
+      holePreviewJob++;
       updateCompAddButton();
       const st = document.getElementById("compStatus");
       st.className = "status";
