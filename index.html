@@ -338,83 +338,83 @@
 <div id="app">
   <!-- ============ LEFT TOOL RAIL ============ -->
   <div id="toolRail">
-    <button class="rail-btn active" data-tool="import" title="Імпорт файлу та глобальні налаштування (V)">
+    <button class="rail-btn active" data-tool="import" data-i18n-tip="tool.import.tip" title="Імпорт файлу та глобальні налаштування (V)">
       <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>
-      <span>Імпорт</span>
+      <span data-i18n="tool.import">Імпорт</span>
     </button>
-    <button class="rail-btn" data-tool="crop" title="Обрізка прямокутною рамкою (C)">
+    <button class="rail-btn" data-tool="crop" data-i18n-tip="tool.crop.tip" title="Обрізка прямокутною рамкою (C)">
       <svg viewBox="0 0 24 24"><path d="M6 2v16h16M2 6h16v16"/></svg>
-      <span>Обрізка</span>
+      <span data-i18n="tool.crop">Обрізка</span>
     </button>
-    <button class="rail-btn" data-tool="perspective" title="Перспектива — випрямлення за 4 кутами (P)">
+    <button class="rail-btn" data-tool="perspective" data-i18n-tip="tool.perspective.tip" title="Перспектива — випрямлення за 4 кутами (P)">
       <svg viewBox="0 0 24 24"><path d="M2 8l9-6 11 6v8l-11 6-9-6z"/><path d="M2 8h9v14"/></svg>
-      <span>Перспектива</span>
+      <span data-i18n="tool.perspective">Перспектива</span>
     </button>
-    <button class="rail-btn" data-tool="scale" title="Масштаб за розмірами (S)">
+    <button class="rail-btn" data-tool="scale" data-i18n-tip="tool.scale.tip" title="Масштаб за розмірами (S)">
       <svg viewBox="0 0 24 24"><path d="M3 6h6M3 6v6M21 18h-6M21 18v-6"/><path d="M9 15L3 21M15 9l6-6"/></svg>
-      <span>Масштаб</span>
+      <span data-i18n="tool.scale">Масштаб</span>
     </button>
-    <button class="rail-btn" data-tool="detect" title="Компоненти для калібрування (D)">
+    <button class="rail-btn" data-tool="detect" data-i18n-tip="tool.detect.tip" title="Компоненти для калібрування (D)">
       <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h8M8 18h8M6 8v8M18 8v8"/></svg>
-      <span>Компоненти</span>
+      <span data-i18n="tool.detect">Компоненти</span>
     </button>
-    <button class="rail-btn" data-tool="binary" title="Бінаризація — виділити доріжки (B)">
+    <button class="rail-btn" data-tool="binary" data-i18n-tip="tool.binary.tip" title="Бінаризація — виділити доріжки (B)">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
-      <span>Бінаризація</span>
+      <span data-i18n="tool.binary">Бінаризація</span>
     </button>
-    <button class="rail-btn" data-tool="paint" title="Малювання — пензель, лінія, заливка, гумка (M)">
+    <button class="rail-btn" data-tool="paint" data-i18n-tip="tool.paint.tip" title="Малювання — пензель, лінія, заливка, гумка (M)">
       <svg viewBox="0 0 24 24"><path d="M4 20l1-5 10-10 4 4-10 10z"/><path d="M13 7l4 4"/><path d="M18 4l2 2"/></svg>
-      <span>Малювання</span>
+      <span data-i18n="tool.paint">Малювання</span>
     </button>
-    <button class="rail-btn" data-tool="export" title="Експорт PNG / PDF (E)">
+    <button class="rail-btn" data-tool="export" data-i18n-tip="tool.export.tip" title="Експорт PNG / PDF (E)">
       <svg viewBox="0 0 24 24"><path d="M12 19V7"/><path d="M7 12l5-5 5 5"/><path d="M4 4h16"/></svg>
-      <span>Експорт</span>
+      <span data-i18n="tool.export">Експорт</span>
     </button>
     <div class="rail-sep"></div>
-    <button class="rail-btn" id="undoBtn" title="Скасувати останню дію (Ctrl+Z)" disabled>
+    <button class="rail-btn" id="undoBtn" data-i18n-tip="tool.undo.tip" title="Скасувати останню дію (Ctrl+Z)" disabled>
       <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
-      <span>Відміна</span>
+      <span data-i18n="tool.undo">Відміна</span>
     </button>
-    <button class="rail-btn" id="redoBtn" title="Повторити скасовану дію (Ctrl+Shift+Z)" disabled>
+    <button class="rail-btn" id="redoBtn" data-i18n-tip="tool.redo.tip" title="Повторити скасовану дію (Ctrl+Shift+Z)" disabled>
       <svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
-      <span>Повтор</span>
+      <span data-i18n="tool.redo">Повтор</span>
     </button>
-    <button class="rail-btn" id="resetBtn" title="Скинути до оригіналу">
+    <button class="rail-btn" id="resetBtn" data-i18n-tip="tool.reset.tip" title="Скинути до оригіналу">
       <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-      <span>Скинути</span>
+      <span data-i18n="tool.reset">Скинути</span>
     </button>
     <div class="rail-spacer"></div>
-    <button class="rail-btn" id="settingsBtn" title="Налаштування — мова та тема" aria-haspopup="dialog" aria-expanded="false">
+    <button class="rail-btn" id="settingsBtn" data-i18n-tip="tool.settings.tip" title="Налаштування — мова та тема" aria-haspopup="dialog" aria-expanded="false">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v0a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15z"/></svg>
-      <span>Ще</span>
+      <span data-i18n="tool.settings">Ще</span>
     </button>
   </div>
 
   <!-- ============ SETTINGS POPOVER ============ -->
-  <div id="settingsPop" role="dialog" aria-label="Налаштування" hidden>
+  <div id="settingsPop" role="dialog" data-i18n-aria="set.title" aria-label="Налаштування" hidden>
     <div class="sp-head">
-      <strong>Налаштування</strong>
-      <button class="sp-close" id="settingsClose" aria-label="Закрити">
+      <strong data-i18n="set.title">Налаштування</strong>
+      <button class="sp-close" id="settingsClose" data-i18n-aria="set.close" aria-label="Закрити">
         <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
 
     <div class="sp-sec">
-      <div class="sp-label">Тема</div>
+      <div class="sp-label" data-i18n="set.theme">Тема</div>
       <div class="seg" id="themeSeg">
         <button class="seg-btn" data-theme-opt="light">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-          Світла
+          <span data-i18n="set.light">Світла</span>
         </button>
         <button class="seg-btn" data-theme-opt="dark">
           <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-          Темна
+          <span data-i18n="set.dark">Темна</span>
         </button>
       </div>
     </div>
 
     <div class="sp-sec">
-      <div class="sp-label">Мова</div>
+      <div class="sp-label" data-i18n="set.lang">Мова</div>
       <div class="seg" id="langSeg">
         <button class="seg-btn" data-lang-opt="uk">Українська</button>
         <button class="seg-btn" data-lang-opt="en">English</button>
@@ -430,14 +430,14 @@
 
     <div id="dropHint">
       <div style="font-size:48px;opacity:.35">📄</div>
-      <h1>Перетягніть PDF або зображення</h1>
-      <p>або натисніть кнопку «Відкрити файл» праворуч</p>
+      <h1 data-i18n="drop.title">Перетягніть PDF або зображення</h1>
+      <p data-i18n="drop.sub">або натисніть кнопку «Відкрити файл» праворуч</p>
     </div>
 
     <div id="cornerSize">
-      <div class="cs-row"><span class="cs-tag" id="csTagImg">зобр.</span><span class="cs-main" id="csImg">— × —</span></div>
+      <div class="cs-row"><span class="cs-tag" id="csTagImg" data-i18n="cs.img">зобр.</span><span class="cs-main" id="csImg">— × —</span></div>
       <div class="cs-sub" id="csImgSub"></div>
-      <div class="cs-row" id="csFrameRow" style="display:none"><span class="cs-tag">рамка</span><span class="cs-main cs-frame" id="csFrame">— × —</span></div>
+      <div class="cs-row" id="csFrameRow" style="display:none"><span class="cs-tag" data-i18n="cs.frame">рамка</span><span class="cs-main cs-frame" id="csFrame">— × —</span></div>
     </div>
 
     <div id="toast"></div>
@@ -445,142 +445,142 @@
 
   <!-- ============ RIGHT SIDE PANEL ============ -->
   <div id="sidePanel">
-    <div id="panelHead"><span class="dot"></span><span id="panelTitle">Файл</span></div>
+    <div id="panelHead"><span class="dot"></span><span id="panelTitle" data-i18n="panel.file">Файл</span></div>
     <div id="panelBody">
 
       <!-- ---- FILE / GLOBAL ---- -->
       <div class="pane active" data-pane="import">
-        <button class="btn primary" id="openBtn">Відкрити файл</button>
+        <button class="btn primary" id="openBtn" data-i18n="imp.open">Відкрити файл</button>
         <input type="file" id="fileInput" accept="image/*,.pdf" hidden>
 
         <div class="size-badge" style="margin-top:14px;">
           <div class="big" id="sizeDisplay">— × — мм</div>
-          <div class="sub" id="dpiDisplay">Масштаб: не визначено</div>
+          <div class="sub" id="dpiDisplay" data-i18n="size.undef">Масштаб: не визначено</div>
         </div>
 
         <div class="field">
-          <label>Приріст (дилатація), px</label>
+          <label data-i18n="imp.dilate">Приріст (дилатація), px</label>
           <div class="slider-row">
             <input type="range" id="dilateSlider" min="0" max="10" step="0.1" value="0">
             <output id="dilateVal">0</output>
           </div>
         </div>
-        <label class="chk"><input type="checkbox" id="invertChk"> Інверсія (негатив)</label>
+        <label class="chk"><input type="checkbox" id="invertChk"> <span data-i18n="imp.invert">Інверсія (негатив)</span></label>
 
         <div class="field" style="margin-top:16px;">
-          <label>Одиниці розміру</label>
+          <label data-i18n="imp.units">Одиниці розміру</label>
           <div class="row2">
-            <button class="btn round-btn" id="unitMm" title="Міліметри">мм</button>
-            <button class="btn round-btn" id="unitInch" title="Дюйми">дюйм</button>
+            <button class="btn round-btn" id="unitMm" data-i18n="imp.mm" data-i18n-tip="imp.mm.tip" title="Міліметри">мм</button>
+            <button class="btn round-btn" id="unitInch" data-i18n="imp.inch" data-i18n-tip="imp.inch.tip" title="Дюйми">дюйм</button>
           </div>
         </div>
       </div>
 
       <!-- ---- CROP ---- -->
       <div class="pane" data-pane="crop">
-        <p class="hint">Тягніть за кути або краї рамки. Потім натисніть «Застосувати».</p>
+        <p class="hint" data-i18n="crop.hint">Тягніть за кути або краї рамки. Потім натисніть «Застосувати».</p>
         <div class="size-badge">
           <div class="big" id="cropSize">— × —</div>
-          <div class="sub">розмір рамки</div>
+          <div class="sub" data-i18n="crop.frameSize">розмір рамки</div>
         </div>
         <div class="field">
-          <label>Округлити розмір рамки</label>
+          <label data-i18n="crop.round">Округлити розмір рамки</label>
           <div class="row3">
-            <button class="btn round-btn" data-round="floor" title="Округлити вниз (124.9 → 124)"><svg viewBox="0 0 24 24"><path d="M12 4v14"/><path d="M6 12l6 6 6-6"/><path d="M4 21h16"/></svg></button>
-            <button class="btn round-btn" data-round="round" title="Округлити до найближчого (124.9 → 125)"><svg viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/></svg></button>
-            <button class="btn round-btn" data-round="ceil" title="Округлити вгору (124.1 → 125)"><svg viewBox="0 0 24 24"><path d="M12 20V6"/><path d="M6 12l6-6 6 6"/><path d="M4 3h16"/></svg></button>
+            <button class="btn round-btn" data-round="floor" data-i18n-tip="round.floor.tip" title="Округлити вниз (124.9 → 124)"><svg viewBox="0 0 24 24"><path d="M12 4v14"/><path d="M6 12l6 6 6-6"/><path d="M4 21h16"/></svg></button>
+            <button class="btn round-btn" data-round="round" data-i18n-tip="round.round.tip" title="Округлити до найближчого (124.9 → 125)"><svg viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/></svg></button>
+            <button class="btn round-btn" data-round="ceil" data-i18n-tip="round.ceil.tip" title="Округлити вгору (124.1 → 125)"><svg viewBox="0 0 24 24"><path d="M12 20V6"/><path d="M6 12l6-6 6 6"/><path d="M4 3h16"/></svg></button>
           </div>
         </div>
-        <button class="btn ok" id="cropApply">Застосувати обрізку</button>
-        <button class="btn" id="cropReset">Скинути рамку</button>
+        <button class="btn ok" id="cropApply" data-i18n="crop.apply">Застосувати обрізку</button>
+        <button class="btn" id="cropReset" data-i18n="crop.reset">Скинути рамку</button>
       </div>
 
       <!-- ---- PERSPECTIVE ---- -->
       <div class="pane" data-pane="perspective">
-        <p class="hint">Перетягніть 4 кути так, щоб вони лягли на кути плати на фото. Потім «Випрямити».</p>
-        <label class="chk"><input type="checkbox" id="perspAuto" checked> Автоматично визначати кути</label>
+        <p class="hint" data-i18n="persp.hint">Перетягніть 4 кути так, щоб вони лягли на кути плати на фото. Потім «Випрямити».</p>
+        <label class="chk"><input type="checkbox" id="perspAuto" checked> <span data-i18n="persp.auto">Автоматично визначати кути</span></label>
         <div class="field">
-          <label>Вихідний розмір</label>
+          <label data-i18n="persp.outSize">Вихідний розмір</label>
           <div class="row2">
-            <div><input type="number" id="perspW" placeholder="W, мм" disabled></div>
-            <div><input type="number" id="perspH" placeholder="H, мм" disabled></div>
+            <div><input type="number" id="perspW" data-i18n-ph="persp.w" placeholder="W, мм" disabled></div>
+            <div><input type="number" id="perspH" data-i18n-ph="persp.h" placeholder="H, мм" disabled></div>
           </div>
-          <p class="hint" style="margin:6px 0 0">Порожньо = взяти з розміру рамки.</p>
+          <p class="hint" style="margin:6px 0 0" data-i18n="persp.empty">Порожньо = взяти з розміру рамки.</p>
         </div>
-        <button class="btn ok" id="perspApply">Випрямити</button>
-        <button class="btn" id="perspReset">Скинути кути</button>
+        <button class="btn ok" id="perspApply" data-i18n="persp.apply">Випрямити</button>
+        <button class="btn" id="perspReset" data-i18n="persp.reset">Скинути кути</button>
       </div>
 
       <!-- ---- SCALE BY DIMENSIONS ---- -->
       <div class="pane" data-pane="scale">
-        <p class="hint">Приведіть усе зображення до відомих розмірів у мм.</p>
+        <p class="hint" data-i18n="scale.hint">Приведіть усе зображення до відомих розмірів у мм.</p>
 
         <div class="field">
-          <label>Режим</label>
-          <label class="chk" style="margin:0 0 6px"><input type="radio" name="scaleMode" value="wh" checked> Ширина + висота</label>
-          <label class="chk" style="margin:0"><input type="radio" name="scaleMode" value="two"> Відстань між двома точками</label>
+          <label data-i18n="scale.mode">Режим</label>
+          <label class="chk" style="margin:0 0 6px"><input type="radio" name="scaleMode" value="wh" checked> <span data-i18n="scale.mode.wh">Ширина + висота</span></label>
+          <label class="chk" style="margin:0"><input type="radio" name="scaleMode" value="two"> <span data-i18n="scale.mode.two">Відстань між двома точками</span></label>
         </div>
 
         <div id="scaleWhPane">
           <div class="row2">
-            <div class="field"><label>Ширина, мм</label><input type="number" id="scaleW" step="0.01" placeholder="100"></div>
-            <div class="field"><label>Висота, мм</label><input type="number" id="scaleH" step="0.01" placeholder="80"></div>
+            <div class="field"><label data-i18n="scale.width">Ширина, мм</label><input type="number" id="scaleW" step="0.01" placeholder="100"></div>
+            <div class="field"><label data-i18n="scale.height">Висота, мм</label><input type="number" id="scaleH" step="0.01" placeholder="80"></div>
           </div>
-          <label class="chk"><input type="checkbox" id="scaleLock" checked> Зберігати пропорції</label>
+          <label class="chk"><input type="checkbox" id="scaleLock" checked> <span data-i18n="scale.lock">Зберігати пропорції</span></label>
           <div class="field">
-            <label>Округлити до цілих мм</label>
+            <label data-i18n="scale.roundTo">Округлити до цілих мм</label>
             <div class="row3">
-              <button class="btn round-btn" id="scaleRoundFloor" data-round="floor" title="Округлити вниз (124.9 → 124)"><svg viewBox="0 0 24 24"><path d="M12 4v14"/><path d="M6 12l6 6 6-6"/><path d="M4 21h16"/></svg></button>
-              <button class="btn round-btn" id="scaleRound" data-round="round" title="Округлити до найближчого (124.9 → 125)"><svg viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/></svg></button>
-              <button class="btn round-btn" id="scaleRoundCeil" data-round="ceil" title="Округлити вгору (124.1 → 125)"><svg viewBox="0 0 24 24"><path d="M12 20V6"/><path d="M6 12l6-6 6 6"/><path d="M4 3h16"/></svg></button>
+              <button class="btn round-btn" id="scaleRoundFloor" data-round="floor" data-i18n-tip="round.floor.tip" title="Округлити вниз (124.9 → 124)"><svg viewBox="0 0 24 24"><path d="M12 4v14"/><path d="M6 12l6 6 6-6"/><path d="M4 21h16"/></svg></button>
+              <button class="btn round-btn" id="scaleRound" data-round="round" data-i18n-tip="round.round.tip" title="Округлити до найближчого (124.9 → 125)"><svg viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/></svg></button>
+              <button class="btn round-btn" id="scaleRoundCeil" data-round="ceil" data-i18n-tip="round.ceil.tip" title="Округлити вгору (124.1 → 125)"><svg viewBox="0 0 24 24"><path d="M12 20V6"/><path d="M6 12l6-6 6 6"/><path d="M4 3h16"/></svg></button>
             </div>
-            <p class="hint" style="margin:6px 0 0" id="roundHint">Округлення розміру до цілих міліметрів.</p>
+            <p class="hint" style="margin:6px 0 0" id="roundHint" data-i18n="scale.roundHint">Округлення розміру до цілих міліметрів.</p>
           </div>
-          <button class="btn primary" id="scaleWhApply">Застосувати</button>
+          <button class="btn primary" id="scaleWhApply" data-i18n="scale.apply">Застосувати</button>
         </div>
 
         <div id="scaleTwoPane" style="display:none">
-          <p class="hint">Клікніть 2 точки на зображенні, потім введіть реальну відстань.</p>
-          <div class="field"><label>Реальна відстань, мм</label><input type="number" id="scaleDistMm" step="0.01" placeholder="10"></div>
-          <button class="btn primary" id="scaleTwoApply" disabled>Застосувати</button>
-          <button class="btn" id="scaleTwoReset">Скинути точки</button>
+          <p class="hint" data-i18n="scale.twoHint">Клікніть 2 точки на зображенні, потім введіть реальну відстань.</p>
+          <div class="field"><label data-i18n="scale.dist">Реальна відстань, мм</label><input type="number" id="scaleDistMm" step="0.01" placeholder="10"></div>
+          <button class="btn primary" id="scaleTwoApply" data-i18n="scale.apply" disabled>Застосувати</button>
+          <button class="btn" id="scaleTwoReset" data-i18n="scale.twoReset">Скинути точки</button>
         </div>
 
         <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
-          <label>Поточний масштаб</label>
+          <label data-i18n="scale.current">Поточний масштаб</label>
           <div class="size-badge" style="margin:0;">
             <div class="big" id="scaleCurrent">—</div>
-            <div class="sub" id="scalePxPerMm">px / мм</div>
+            <div class="sub" id="scalePxPerMm" data-i18n="scale.ppm">px / мм</div>
           </div>
         </div>
       </div>
 
       <!-- ---- DETECT ---- -->
       <div class="pane" data-pane="detect">
-        <p class="hint">Додайте відомі компоненти — за ними інструмент визначить масштаб і вирівняє зображення. Автоматика не використовується: усе задаєте ви.</p>
+        <p class="hint" data-i18n="det.hint">Додайте відомі компоненти — за ними інструмент визначить масштаб і вирівняє зображення. Автоматика не використовується: усе задаєте ви.</p>
 
         <!-- Крок 1: тип вибору -->
         <div class="field">
-          <label>Тип вибору</label>
+          <label data-i18n="det.pickType">Тип вибору</label>
           <select id="compPickType" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;">
-            <option value="pad">Майданчики (SMD)</option>
-            <option value="hole">Отвори (наскрізні)</option>
-            <option value="point">Точка</option>
+            <option value="pad" data-i18n="det.pads">Майданчики (SMD)</option>
+            <option value="hole" data-i18n="det.holes">Отвори (наскрізні)</option>
+            <option value="point" data-i18n="det.point">Точка</option>
           </select>
         </div>
 
         <!-- Крок 2: компонент -->
         <div class="field">
-          <label>Компонент</label>
+          <label data-i18n="det.comp">Компонент</label>
           <select id="compKind" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;">
-            <option value="line">Лінія з кроком…</option>
+            <option value="line" data-i18n="det.pitchLine">Лінія з кроком…</option>
           </select>
         </div>
 
         <!-- Параметри лінії з кроком -->
         <div id="compLineParams">
           <div class="field">
-            <label>Крок</label>
+            <label data-i18n="det.pitch">Крок</label>
             <div class="row2">
               <input type="number" id="compPitch" step="0.01" min="0.1" value="2.54">
               <select id="compPitchUnit" style="border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;">
@@ -590,71 +590,71 @@
             </div>
           </div>
           <div class="field">
-            <label>Кількість контактів</label>
+            <label data-i18n="det.count">Кількість контактів</label>
             <input type="number" id="compCount" step="1" min="2" value="2">
           </div>
         </div>
 
-        <button class="btn primary" id="compAddBtn">+ Додати компонент</button>
-        <p class="hint" id="compSnapHint" style="margin:10px 0 0">Тисніть приблизно в отвір — центр знайдеться сам за схожим кольором, товщина кліку не важлива.</p>
+        <button class="btn primary" id="compAddBtn" data-i18n="det.add">+ Додати компонент</button>
+        <p class="hint" id="compSnapHint" style="margin:10px 0 0" data-i18n="det.snapHint">Тисніть приблизно в отвір — центр знайдеться сам за схожим кольором, товщина кліку не важлива.</p>
         <p class="status" id="compStatus"></p>
 
         <!-- Список доданих -->
         <div class="det-list" id="compList"></div>
 
-        <button class="btn ok" id="compAlignBtn" style="margin-top:12px;" disabled>Вирівняти за компонентами</button>
+        <button class="btn ok" id="compAlignBtn" style="margin-top:12px;" data-i18n="det.align" disabled>Вирівняти за компонентами</button>
         <p class="status" id="compAlignStatus"></p>
       </div>
 
       <!-- ---- EXPORT ---- -->
       <!-- ---- BINARIZE ---- -->
       <div class="pane" data-pane="binary">
-        <p class="hint">Відділіть доріжки від плати. Візьміть піпеткою колір доріжки — інструмент підбере поріг сам. Далі підстроюєте повзунками.</p>
+        <p class="hint" data-i18n="bin.hint">Відділіть доріжки від плати. Візьміть піпеткою колір доріжки — інструмент підбере поріг сам. Далі підстроюєте повзунками.</p>
 
         <div class="field">
-          <label>Зразки доріжок <span style="text-transform:none;font-weight:400">(можна два)</span></label>
+          <label><span data-i18n="bin.samples">Зразки доріжок</span> <span style="text-transform:none;font-weight:400" data-i18n="bin.samplesCan2">(можна два)</span></label>
           <div class="row2">
-            <button class="btn round-btn" id="binPickBtn" style="flex:1" title="Взяти колір доріжки піпеткою">
+            <button class="btn round-btn" id="binPickBtn" style="flex:1" data-i18n-tip="bin.pick.tip" title="Взяти колір доріжки піпеткою">
               <svg viewBox="0 0 24 24"><path d="M15 3l6 6"/><path d="M17 5l-9 9-3 6 6-3 9-9z"/></svg>
-              Піпетка
+              <span data-i18n="bin.pick">Піпетка</span>
             </button>
-            <button class="btn round-btn icon-btn" id="binPickReset" title="Скинути обидва зразки" disabled>
+            <button class="btn round-btn icon-btn" id="binPickReset" data-i18n-tip="bin.pickReset.tip" title="Скинути обидва зразки" disabled>
               <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
             </button>
           </div>
           <div id="binSample" class="bin-sample">
             <span class="bin-thumb" id="binThumb"></span>
-            <span class="bin-meta" id="binMeta">не вибрано</span>
+            <span class="bin-meta" id="binMeta" data-i18n="bin.none">не вибрано</span>
           </div>
           <div id="binSample2Row" class="bin-sample" style="display:none">
             <span class="bin-thumb" id="binThumb2"></span>
             <span class="bin-meta" id="binMeta2">—</span>
-            <button class="bin-x" id="binPickReset2" title="Прибрати другий зразок">✕</button>
+            <button class="bin-x" id="binPickReset2" data-i18n-tip="bin.pickReset2.tip" title="Прибрати другий зразок">✕</button>
           </div>
-          <p class="hint" style="margin:6px 0 0">Два зразки — коли на платі доріжки різного кольору: беруться обидва, поріг спільний.</p>
+          <p class="hint" style="margin:6px 0 0" data-i18n="bin.twoHint">Два зразки — коли на платі доріжки різного кольору: беруться обидва, поріг спільний.</p>
         </div>
 
         <div class="field">
-          <label>Режим відділення</label>
+          <label data-i18n="bin.mode">Режим відділення</label>
           <div class="row3" id="binModeRow">
-            <button class="btn round-btn" data-binmode="luma" title="За яскравістю (чорне/біле)">
+            <button class="btn round-btn" data-binmode="luma" data-i18n-tip="bin.mode.luma.tip" title="За яскравістю (чорне/біле)">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
-              Світло
+              <span data-i18n="bin.mode.luma">Світло</span>
             </button>
-            <button class="btn round-btn" data-binmode="color" title="За кольором (відтінок + насиченість)">
+            <button class="btn round-btn" data-binmode="color" data-i18n-tip="bin.mode.color.tip" title="За кольором (відтінок + насиченість)">
               <svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/></svg>
-              Колір
+              <span data-i18n="bin.mode.color">Колір</span>
             </button>
-            <button class="btn round-btn" data-binmode="adaptive" title="Локальна адаптація — рівномірно на нерівному фоні">
+            <button class="btn round-btn" data-binmode="adaptive" data-i18n-tip="bin.mode.adaptive.tip" title="Локальна адаптація — рівномірно на нерівному фоні">
               <svg viewBox="0 0 24 24"><path d="M4 18l5-10 4 8 3-5 4 7"/></svg>
-              Авто
+              <span data-i18n="bin.mode.adaptive">Авто</span>
             </button>
           </div>
           <p class="hint" style="margin:6px 0 0" id="binModeHint">Колір — найкраще для кольорового фото плати.</p>
         </div>
 
         <div class="field" id="binThreshField">
-          <label>Поріг</label>
+          <label data-i18n="bin.thresh">Поріг</label>
           <div class="slider-row">
             <input type="range" id="binThresh" min="0" max="255" step="1" value="128">
             <output id="binThreshVal">128</output>
@@ -662,7 +662,7 @@
         </div>
 
         <div class="field" id="binSoftField">
-          <label>Навкруги (м'який край)</label>
+          <label data-i18n="bin.soft">Навкруги (м'який край)</label>
           <div class="slider-row">
             <input type="range" id="binSoft" min="0" max="30" step="1" value="0">
             <output id="binSoftVal">0</output>
@@ -670,7 +670,7 @@
         </div>
 
         <div class="field" id="binAdaptField" style="display:none">
-          <label>Радіус адаптації, px</label>
+          <label data-i18n="bin.adapt">Радіус адаптації, px</label>
           <div class="slider-row">
             <input type="range" id="binAdapt" min="4" max="80" step="1" value="25">
             <output id="binAdaptVal">25</output>
@@ -678,51 +678,51 @@
         </div>
 
         <div class="field">
-          <label>Дрібний шум</label>
+          <label data-i18n="bin.denoise">Дрібний шум</label>
           <div class="slider-row">
             <input type="range" id="binDenoise" min="0" max="32" step="1" value="0">
             <output id="binDenoiseVal">0</output>
           </div>
-          <p class="hint" style="margin:6px 0 0">Прибирає окремі точки й піщинки. Тонкі доріжки не зникають. Великі значення — для брудного фону.</p>
+          <p class="hint" style="margin:6px 0 0" data-i18n="bin.denoiseHint">Прибирає окремі точки й піщинки. Тонкі доріжки не зникають. Великі значення — для брудного фону.</p>
         </div>
 
-        <label class="chk"><input type="checkbox" id="binInvert"> Інвертувати (негатив)</label>
+        <label class="chk"><input type="checkbox" id="binInvert"> <span data-i18n="bin.invert">Інвертувати (негатив)</span></label>
 
         <div class="size-badge" style="margin-top:12px">
           <div class="big" id="binCoverage">—</div>
-          <div class="sub">заливка дорижок</div>
+          <div class="sub" data-i18n="bin.coverage">заливка дорижок</div>
         </div>
 
-        <button class="btn primary" id="binApply" style="margin-top:10px">Застосувати</button>
+        <button class="btn primary" id="binApply" style="margin-top:10px" data-i18n="bin.apply">Застосувати</button>
         <button class="btn" id="binPreviewToggle" style="margin-top:6px">
           <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-          <span>Оригінал</span>
+          <span data-i18n="bin.preview">Оригінал</span>
         </button>
       </div>
 
       <div class="pane" data-pane="paint">
-        <p class="hint">Зафарбуйте або виправте вручну: пензель, лінія, заливка, гумка. Діє на чорне/біле — як на граверах.</p>
+        <p class="hint" data-i18n="paint.hint">Зафарбуйте або виправте вручну: пензель, лінія, заливка, гумка. Діє на чорне/біле — як на граверах.</p>
 
         <div class="field">
-          <label>Інструмент</label>
+          <label data-i18n="paint.tool">Інструмент</label>
           <div class="row3" id="paintModeRow">
-            <button class="btn round-btn" data-paint="brush" title="Пензель (B)">
+            <button class="btn round-btn" data-paint="brush" data-i18n-tip="paint.brush.tip" title="Пензель (B)">
               <svg viewBox="0 0 24 24"><path d="M4 20l1-5 10-10 4 4-10 10z"/><path d="M13 7l4 4"/></svg>
             </button>
-            <button class="btn round-btn" data-paint="line" title="Пряма лінія (L)">
+            <button class="btn round-btn" data-paint="line" data-i18n-tip="paint.line.tip" title="Пряма лінія (L)">
               <svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><circle cx="4" cy="20" r="2"/><circle cx="20" cy="4" r="2"/></svg>
             </button>
-            <button class="btn round-btn" data-paint="fill" title="Заливка області (F)">
+            <button class="btn round-btn" data-paint="fill" data-i18n-tip="paint.fill.tip" title="Заливка області (F)">
               <svg viewBox="0 0 24 24"><path d="M4 14l7-7 7 7-7 7z"/><path d="M19 15s2 2.5 2 4a2 2 0 1 1-4 0c0-1.5 2-4 2-4z"/></svg>
             </button>
-            <button class="btn round-btn" data-paint="erase" title="Гумка (E)">
+            <button class="btn round-btn" data-paint="erase" data-i18n-tip="paint.erase.tip" title="Гумка (E)">
               <svg viewBox="0 0 24 24"><path d="M8 21l-5-5 11-11 6 6-10 10z"/><path d="M3 21h18"/></svg>
             </button>
           </div>
         </div>
 
         <div class="field">
-          <label>Розмір, px</label>
+          <label data-i18n="paint.size">Розмір, px</label>
           <div class="slider-row">
             <input type="range" id="paintSize" min="1" max="200" step="1" value="8">
             <output id="paintSizeVal">8</output>
@@ -736,88 +736,88 @@
         </div>
 
         <div class="field">
-          <label>Форма пензля</label>
+          <label data-i18n="paint.shape">Форма пензля</label>
           <div class="row2" id="paintShapeRow">
-            <button class="btn round-btn" data-paintshape="round" title="Круглий пензель">
+            <button class="btn round-btn" data-paintshape="round" data-i18n-tip="paint.round.tip" title="Круглий пензель">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>
             </button>
-            <button class="btn round-btn" data-paintshape="square" title="Квадратний пензель">
+            <button class="btn round-btn" data-paintshape="square" data-i18n-tip="paint.square.tip" title="Квадратний пензель">
               <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/></svg>
             </button>
           </div>
         </div>
 
         <div class="field">
-          <label>Колір</label>
+          <label data-i18n="paint.color">Колір</label>
           <div class="row2" id="paintColorRow">
-            <button class="btn round-btn" data-paintcolor="black" title="Чорний — додати">
+            <button class="btn round-btn" data-paintcolor="black" data-i18n-tip="paint.black.tip" title="Чорний — додати">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg>
-              Чорний
+              <span data-i18n="paint.black">Чорний</span>
             </button>
-            <button class="btn round-btn" data-paintcolor="white" title="Білий — прибрати">
+            <button class="btn round-btn" data-paintcolor="white" data-i18n-tip="paint.white.tip" title="Білий — прибрати">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>
-              Білий
+              <span data-i18n="paint.white">Білий</span>
             </button>
           </div>
-          <label class="chk" style="margin-top:8px"><input type="checkbox" id="paintThresh"> Малювати лише по «поганому» (за порогом)</label>
+          <label class="chk" style="margin-top:8px"><input type="checkbox" id="paintThresh"> <span data-i18n="paint.onlyBad">Малювати лише по «поганому» (за порогом)</span></label>
         </div>
 
-        <label class="chk"><input type="checkbox" id="paintSnap"> Вирівнювати лінію по осях (Shift)</label>
+        <label class="chk"><input type="checkbox" id="paintSnap"> <span data-i18n="paint.snap">Вирівнювати лінію по осях (Shift)</span></label>
 
         <div class="field">
-          <label>Перегляд</label>
+          <label data-i18n="paint.view">Перегляд</label>
           <div class="row2" id="paintViewRow">
-            <button class="btn round-btn" data-paintview="edit" title="Малювати по результату">
+            <button class="btn round-btn" data-paintview="edit" data-i18n-tip="paint.view.edit.tip" title="Малювати по результату">
               <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/></svg>
-              Результат
+              <span data-i18n="paint.view.edit">Результат</span>
             </button>
-            <button class="btn round-btn" data-paintview="photo" title="Дивитись оригінал">
+            <button class="btn round-btn" data-paintview="photo" data-i18n-tip="paint.view.photo.tip" title="Дивитись оригінал">
               <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-7 8"/></svg>
-              Оригінал
+              <span data-i18n="paint.view.photo">Оригінал</span>
             </button>
           </div>
           <div class="slider-row" style="margin-top:8px">
-            <span style="font-size:11px;color:var(--muted);min-width:64px">Прозорість</span>
+            <span style="font-size:11px;color:var(--muted);min-width:64px" data-i18n="paint.opacity">Прозорість</span>
             <input type="range" id="paintGhost" min="0" max="100" step="5" value="50">
             <output id="paintGhostVal">50%</output>
           </div>
-          <p class="hint" style="margin:6px 0 0">Оригінал показує фото під бітмапом. Прозорість — скільки видно результат: 0 % = тільки фото, 100 % = тільки результат.</p>
+          <p class="hint" style="margin:6px 0 0" data-i18n="paint.ghostHint">Оригінал показує фото під бітмапом. Прозорість — скільки видно результат: 0 % = тільки фото, 100 % = тільки результат.</p>
         </div>
 
         <div class="field" style="margin-top:14px">
-          <label>Пороговий шар <span style="text-transform:none;font-weight:400">(для заливки)</span></label>
+          <label><span data-i18n="paint.level">Пороговий шар</span> <span style="text-transform:none;font-weight:400" data-i18n="paint.levelFor">(для заливки)</span></label>
           <div class="slider-row">
             <input type="range" id="paintLevel" min="0" max="255" step="1" value="128">
             <output id="paintLevelVal">128</output>
           </div>
         </div>
 
-        <button class="btn" id="paintUndo" style="margin-top:10px">Скасувати останній мазок</button>
-        <p class="hint" style="margin-top:8px">Alt + клік — піпетка: бере колір під курсором як чорний/білий.</p>
+        <button class="btn" id="paintUndo" style="margin-top:10px" data-i18n="paint.undo">Скасувати останній мазок</button>
+        <p class="hint" style="margin-top:8px" data-i18n="paint.altHint">Alt + клік — піпетка: бере колір під курсором як чорний/білий.</p>
       </div>
 
       <div class="pane" data-pane="export">
-        <p class="hint">Експорт у растрові формати для гравіювання.</p>
+        <p class="hint" data-i18n="exp.hint">Експорт у растрові формати для гравіювання.</p>
         <div class="field">
-          <label>PNG — роздільність</label>
+          <label data-i18n="exp.pngDpi">PNG — роздільність</label>
           <select id="pngDpi" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;">
-            <option value="300">300 DPI (прев'ю)</option>
+            <option value="300" data-i18n="dpi.300.preview">300 DPI (прев'ю)</option>
             <option value="600" selected>600 DPI</option>
-            <option value="1000">1000 DPI (якісно)</option>
-            <option value="1200">1200 DPI (гравера)</option>
+            <option value="1000" data-i18n="dpi.1000">1000 DPI (якісно)</option>
+            <option value="1200" data-i18n="dpi.1200">1200 DPI (гравера)</option>
           </select>
         </div>
-        <button class="btn primary" id="exportPngBtn" style="margin-top:4px;">Експорт PNG</button>
+        <button class="btn primary" id="exportPngBtn" style="margin-top:4px;" data-i18n="exp.png">Експорт PNG</button>
 
         <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
-          <label>PDF — DPI растру</label>
+          <label data-i18n="exp.pdfDpi">PDF — DPI растру</label>
           <select id="pdfDpi" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;">
             <option value="300">300 DPI</option>
             <option value="600" selected>600 DPI</option>
             <option value="1200">1200 DPI</option>
           </select>
         </div>
-        <button class="btn primary" id="exportPdfBtn" style="margin-top:4px;">Експорт PDF</button>
+        <button class="btn primary" id="exportPdfBtn" style="margin-top:4px;" data-i18n="exp.pdf">Експорт PDF</button>
 
         <p class="status" id="exportStatus"></p>
       </div>
@@ -1066,7 +1066,7 @@ function drawOverlay() {
       ctxOvl.stroke();
       // radius label in image px, shown in mm once the scale is known
       const label = doc.pxPerMm
-        ? `Ø${(holePreview.r * 2 / doc.pxPerMm).toFixed(2)} мм`
+        ? `Ø${(holePreview.r * 2 / doc.pxPerMm).toFixed(2)}${t("msg.mm")}`
         : `r ${holePreview.r.toFixed(1)} px`;
       ctxOvl.font = "bold 11px sans-serif";
       ctxOvl.textAlign = "left";
@@ -1180,7 +1180,7 @@ function drawToolLayer() {
 }
 
 /* ---------- Size label ---------- */
-function unitLabel() { return unit === "mm" ? "мм" : "дюйм"; }
+function unitLabel() { return unit === "mm" ? t("msg.unitMm") : t("msg.unitInch"); }
 function pxToUnit(px) {
   if (!doc || !doc.pxPerMm) return null;
   const mm = px / doc.pxPerMm;
@@ -1200,7 +1200,7 @@ function fmtUnitPx(px, ppm) {
   const v = unit === "mm" ? mm : mm / 25.4;
   const r = Math.round(v * 10) / 10;
   const s = Number.isInteger(r) ? String(r) : r.toFixed(1);
-  return s + (unit === "mm" ? " мм" : "″");
+  return s + (unit === "mm" ? t("msg.mm") : "″");
 }
 // Sole source of truth for the size fields: the bitmap itself.
 // Called after every operation that changes doc.canvas.
@@ -1217,7 +1217,7 @@ function syncScaleFields() {
 function fmtUnit(px) {
   const v = pxToUnit(px);
   if (v == null) return "—";
-  return v.toFixed(2) + (unit === "mm" ? " мм" : "″");
+  return v.toFixed(2) + (unit === "mm" ? t("msg.mm") : "″");
 }
 
 function updateSizeLabel() {
@@ -1231,7 +1231,7 @@ function updateSizeLabel() {
   const tagImg     = document.getElementById("csTagImg");
 
   if (!doc) {
-    sizeEl.textContent = "— × —"; dpiEl.textContent = "Масштаб: не визначено";
+    sizeEl.textContent = "— × —"; dpiEl.textContent = t("size.undef");
     cornerEl.classList.remove("show");
     cornerMain.textContent = "— × —";
     cornerSub.textContent = "";
@@ -1244,14 +1244,14 @@ function updateSizeLabel() {
   if (ppm) {
     sizeEl.textContent = `${fmtUnitPx(w, ppm)} × ${fmtUnitPx(h, ppm)}`;
     const dpi = ppm * 25.4;
-    dpiEl.textContent = `Масштаб: ${dpi.toFixed(0)} DPI · ${ppm.toFixed(2)} px/мм`;
+    dpiEl.textContent = t("msg.scaleSet") + dpi.toFixed(0) + t("msg.dpiLabel") + " · " + ppm.toFixed(2) + t("msg.ppmLabel");
     cornerMain.textContent = `${fmtUnitPx(w, ppm)} × ${fmtUnitPx(h, ppm)}`;
-    cornerSub.textContent = `${w} × ${h} px · ${ppm.toFixed(2)} px/мм · ${dpi.toFixed(0)} DPI`;
+    cornerSub.textContent = `${w} × ${h}px · ${ppm.toFixed(2)}${t("msg.ppmLabel")} · ${dpi.toFixed(0)} DPI`;
   } else {
     sizeEl.textContent = `${w} × ${h} px`;
-    dpiEl.textContent = "Масштаб: не визначено";
+    dpiEl.textContent = t("size.undef");
     cornerMain.textContent = `${w} × ${h} px`;
-    cornerSub.textContent = "Масштаб не визначено";
+    cornerSub.textContent = t("size.undef");
   }
 
   // zoom goes into the image sub-line; the crop frame gets its own row,
@@ -1265,19 +1265,19 @@ function updateSizeLabel() {
       // a frame rounded to whole mm is reported in whole mm, not as the
       // fractional value you get by dividing its pixel width back
       frameVal.textContent = cropFrameMM
-        ? `${cropFrameMM.w} × ${cropFrameMM.h} мм`
+        ? `${cropFrameMM.w} × ${cropFrameMM.h}${t("msg.mm")}`
         : (ppm
           ? `${fmtUnitPx(cropRect.w, ppm)} × ${fmtUnitPx(cropRect.h, ppm)}`
           : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`);
     }
   }
-  if (tagImg) tagImg.textContent = doc.pxPerMm ? "зобр." : "px";
+  if (tagImg) tagImg.textContent = doc.pxPerMm ? t("cs.img") : t("cs.px");
   cornerEl.classList.add("show");
 
   if (cropRect && tool === "crop" && document.querySelector('.pane[data-pane="crop"]').classList.contains("active")) {
     const el = document.getElementById("cropSize");
     el.textContent = cropFrameMM
-      ? `${cropFrameMM.w} × ${cropFrameMM.h} мм`
+      ? `${cropFrameMM.w} × ${cropFrameMM.h}${t("msg.mm")}`
       : (ppm
         ? `${fmtUnitPx(cropRect.w, ppm)} × ${fmtUnitPx(cropRect.h, ppm)}`
         : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`);
@@ -1288,10 +1288,10 @@ function updateSizeLabel() {
   const scPx = document.getElementById("scalePxPerMm");
   if (ppm) {
     scEl.textContent = `${fmtUnitPx(w, ppm)} × ${fmtUnitPx(h, ppm)}`;
-    scPx.textContent = `${ppm.toFixed(2)} px / мм`;
+    scPx.textContent = `${ppm.toFixed(2)} ${t("scale.ppm")}`;
   } else {
     scEl.textContent = `${w} × ${h} px`;
-    scPx.textContent = "px / мм: невідомо";
+    scPx.textContent = t("msg.ppmUnknown");
   }
 }
 
@@ -1320,7 +1320,7 @@ function undo() {
   doc.pxPerMm = s.pxPerMm;
   fitToView();
   render();
-  toast("Скасовано");
+  toast(t("msg.undone"));
   updateHistoryButtons();
 }
 function redo() {
@@ -1335,7 +1335,7 @@ function redo() {
   doc.basePxPerMm = null;
   fitToView();
   render();
-  toast("Повторено");
+  toast(t("msg.redone"));
   updateHistoryButtons();
 }
 function snapshotDoc() {
@@ -1402,10 +1402,10 @@ async function loadFile(file) {
     render();
     syncScaleFields();
     // stay on the Import tool: the user decides when to switch to Crop
-    toast("Файл завантажено");
+    toast(t("msg.fileLoaded"));
   } catch (err) {
     console.error(err);
-    toast("Не вдалося відкрити файл: " + err.message, 4000);
+    toast(t("msg.fileOpenFail") + err.message, 4000);
   }
 }
 function cloneCanvas(src) {
@@ -1558,7 +1558,7 @@ function onDown(e) {
       if (s) {
         const l = 0.299 * s.r + 0.587 * s.g + 0.114 * s.b;
         paintSetColor(l < 128 ? 0 : 255);
-        toast(l < 128 ? "Колір зразка: чорний" : "Колір зразка: білий", 1600);
+        toast(l < 128 ? t("msg.pickBlack") : t("msg.pickWhite"), 1600);
       }
       return;
     }
@@ -1628,7 +1628,7 @@ function onDown(e) {
       if (s) {
         const l = 0.299 * s.r + 0.587 * s.g + 0.114 * s.b;
         paintSetColor(l < 128 ? 0 : 255);
-        toast(l < 128 ? "Колір зразка: чорний" : "Колір зразка: білий", 1600);
+        toast(l < 128 ? t("msg.pickBlack") : t("msg.pickWhite"), 1600);
       }
       return;
     }
@@ -1815,7 +1815,7 @@ window.addEventListener("pointerup", () => { panStart = null; });
 document.getElementById("cropApply").onclick = () => {
   if (!doc || !cropRect) return;
   const R = cropRect;
-  if (R.w < 4 || R.h < 4) { toast("Рамка занадто мала"); return; }
+  if (R.w < 4 || R.h < 4) { toast(t("msg.frameTooSmall")); return; }
   pushHistory();
 
   // A frame rounded to whole mm must stay whole after the cut. With a
@@ -1867,7 +1867,7 @@ document.getElementById("cropApply").onclick = () => {
   fitToView();
   render();
   syncScaleFields();
-  toast(`Обрізано: ${actualSizeText()}`);
+  toast(t("msg.cropped") + actualSizeText());
 };
 document.getElementById("cropReset").onclick = () => { if (doc) { initCrop(); drawToolLayer(); } };
 
@@ -1979,7 +1979,7 @@ document.getElementById("perspApply").onclick = () => {
   outH = clamp(outH, 20, 8000);
 
   pushHistory();
-  toast("Випрямлення…");
+  toast(t("msg.perspRunning"));
   setTimeout(() => {
     const warped = warpPerspective(doc.canvas, perspQuad, outW, outH);
     doc.canvas = warped;
@@ -1995,7 +1995,7 @@ document.getElementById("perspApply").onclick = () => {
     fitToView();
     render();
     syncScaleFields();
-    toast(`Перспективу випрямлено: ${actualSizeText()}`);
+    toast(t("msg.perspDone") + actualSizeText());
   }, 30);
 };
 document.getElementById("perspReset").onclick = () => {
@@ -2043,14 +2043,14 @@ function roundValue(v, type) {
 document.querySelectorAll('.pane[data-pane="crop"] .round-btn').forEach(btn => {
   btn.onclick = () => {
     if (!doc || !cropRect) return;
-    if (!doc.pxPerMm) { toast("Спершу визначте масштаб", 3000); return; }
+    if (!doc.pxPerMm) { toast(t("msg.scaleUnknown"), 3000); return; }
     const type = btn.dataset.round;
     const mmW = cropRect.w / doc.pxPerMm;
     const mmH = cropRect.h / doc.pxPerMm;
 
     const tW = roundValue(mmW, type);
     const tH = roundValue(mmH, type);
-    if (!(tW >= 1) || !(tH >= 1)) { toast("Результат менший за 1 мм", 2500); return; }
+    if (!(tW >= 1) || !(tH >= 1)) { toast(t("msg.sizeUnder1mm"), 2500); return; }
     // The frame is authored in whole millimetres. Keep the rounded mm as the
     // declared size and only store the matching pixel count for drawing, so
     // the panel never shows 169.07 derived back from 638.8 px.
@@ -2059,7 +2059,7 @@ document.querySelectorAll('.pane[data-pane="crop"] .round-btn').forEach(btn => {
     cropRect.h = Math.min(Math.round(tH * doc.pxPerMm), doc.canvas.height - cropRect.y);
     drawToolLayer();
     updateSizeLabel();
-    toast(`Рамка: ${tW} × ${tH} мм`, 2400);
+    toast(t("msg.frame") + `${tW} × ${tH}${t("msg.mm")}`, 2400);
   };
 });
 
@@ -2068,7 +2068,7 @@ document.querySelectorAll('.pane[data-pane="crop"] .round-btn').forEach(btn => {
 document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
   btn.onclick = () => {
     if (!doc) return;
-    if (!doc.pxPerMm) { toast("Спершу визначте масштаб", 3000); return; }
+    if (!doc.pxPerMm) { toast(t("msg.scaleUnknown"), 3000); return; }
     const type = btn.dataset.round;
     const lock = document.getElementById("scaleLock").checked;
 
@@ -2098,7 +2098,7 @@ document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
 
     // apply immediately: rescale the bitmap to exactly tW x tH mm
     scaleToExactSize(tW, tH);
-    toast(`Фактично: ${actualSizeText()}`, 2600);
+    toast(t("msg.actual") + actualSizeText(), 2600);
   };
 });
 
@@ -2199,7 +2199,7 @@ function scaleToExactSize(mmW, mmH) {
 function actualSizeText() {
   if (!doc) return "—";
   const w = doc.canvas.width, h = doc.canvas.height;
-  if (!doc.pxPerMm) return `${w} × ${h} px`;
+  if (!doc.pxPerMm) return `${w} × ${h}${t("msg.px")}`;
   return `${fmtUnitPx(w, doc.pxPerMm)} × ${fmtUnitPx(h, doc.pxPerMm)}`;
 }
 
@@ -2218,7 +2218,7 @@ function scaleCanvasTo(pxPerMm) {
 document.getElementById("scaleWhApply").onclick = () => {
   if (!doc) return;
   if (!doc.pxPerMm) {
-    toast("Спершу визначте масштаб (інструмент «Компоненти»)", 3000);
+    toast(t("msg.scaleUnknownDetect"), 3000);
     return;
   }
   const wEl = document.getElementById("scaleW");
@@ -2235,13 +2235,13 @@ document.getElementById("scaleWhApply").onclick = () => {
   if (lock) {
     if (wIn > 0) { tW = wIn; tH = wIn * aspect; }
     else if (hIn > 0) { tH = hIn; tW = hIn / aspect; }
-    else { toast("Введіть хоча б один розмір"); return; }
+    else { toast(t("msg.enterSize")); return; }
   } else {
     tW = wIn > 0 ? wIn : w / doc.pxPerMm;
     tH = hIn > 0 ? hIn : h / doc.pxPerMm;
-    if (!(wIn > 0) && !(hIn > 0)) { toast("Введіть хоча б один розмір"); return; }
+    if (!(wIn > 0) && !(hIn > 0)) { toast(t("msg.enterSize")); return; }
   }
-  if (!(tW > 0) || !(tH > 0)) { toast("Розмір має бути більше нуля"); return; }
+  if (!(tW > 0) || !(tH > 0)) { toast(t("msg.sizeZero")); return; }
 
   // Only one dimension was typed: the other keeps the current size exactly,
   // not the value displayed in its field (which is rounded for reading).
@@ -2254,19 +2254,19 @@ document.getElementById("scaleWhApply").onclick = () => {
 
   const res = scaleToExactSize(tW, tH);
   syncScaleFields();
-  if (!res) { toast("Не вдалося змінити розмір"); return; }
+  if (!res) { toast(t("msg.sizeFail")); return; }
   const realW = res.w / doc.pxPerMm, realH = res.h / doc.pxPerMm;
   const off = Math.abs(realW - tW) > 0.02 || Math.abs(realH - tH) > 0.02;
-  toast(`${actualSizeText()}${off ? " (округлено до цілих пікселів)" : ""}`);
+  toast(actualSizeText() + (off ? t("msg.roundedWhole") : ""));
 };
 
 document.getElementById("scaleTwoApply").onclick = () => {
   if (!doc || twoPoints.length !== 2) return;
   const distMm = parseFloat(document.getElementById("scaleDistMm").value);
-  if (!(distMm > 0)) { toast("Введіть реальну відстань"); return; }
+  if (!(distMm > 0)) { toast(t("msg.enterDistance")); return; }
   const [a, b] = twoPoints;
   const distPx = Math.hypot(b.x - a.x, b.y - a.y);
-  if (distPx < 2) { toast("Точки занадто близько"); return; }
+  if (distPx < 2) { toast(t("msg.pointsClose")); return; }
   const pxPerMm = distPx / distMm;
   pushHistory();
   doc.pxPerMm = pxPerMm;
@@ -2274,7 +2274,7 @@ document.getElementById("scaleTwoApply").onclick = () => {
   updateScaleTwoButton();
   drawToolLayer();
   render();
-  toast(`Масштаб встановлено: ${pxPerMm.toFixed(2)} px/мм`);
+  toast(t("msg.scaleSet") + `${pxPerMm.toFixed(2)}${t("msg.ppmLabel")}`);
 };
 document.getElementById("scaleTwoReset").onclick = () => { twoPoints = []; updateScaleTwoButton(); drawToolLayer(); };
 function updateScaleTwoButton() {
@@ -2481,7 +2481,7 @@ function rebuildKindOptions() {
     compKind.appendChild(o);
     return o;
   };
-  opt("line", "Лінія з кроком…");
+  opt("line", t("det.pitchLine"));
   for (const name of Object.keys(FOOTPRINTS)) opt("fp:" + name, name);
   updateKindParams();
 }
@@ -2503,7 +2503,7 @@ compPickType.onchange = () => {
 compKind.onchange = updateKindParams;
 
 compAddBtn.onclick = () => {
-  if (!doc) { toast("Спочатку відкрийте файл"); return; }
+  if (!doc) { toast(t("msg.openFirst")); return; }
 
   const pick = compPickType.value;
   const kind = compKind.value;
@@ -2513,10 +2513,10 @@ compAddBtn.onclick = () => {
     const pitch = parseFloat(document.getElementById("compPitch").value);
     const unit = document.getElementById("compPitchUnit").value;
     const count = Math.max(2, Math.round(+document.getElementById("compCount").value || 2));
-    if (!(pitch > 0)) { toast("Введіть крок"); return; }
+    if (!(pitch > 0)) { toast(t("msg.enterPitch")); return; }
     const mmPerStep = unit === "in" ? pitch * 25.4 : pitch;
     comp = {
-      pickType: pick, kind: "line", name: `Лінія ${count}×${pitch}${unit === "in" ? "″" : "мм"}`,
+      pickType: pick, kind: "line", name: t("msg.linePitch", {count, pitch: pitch + (unit === "in" ? "″" : t("msg.mm"))}),
       clicks: [], mmPerStep, count,
     };
   } else {
@@ -2531,14 +2531,14 @@ compAddBtn.onclick = () => {
 
   pendingComponent = comp;
   compStatus.className = "status";
-  compStatus.textContent = `Клікніть ${comp.count} контактів по черзі (${pickLabel(pick)})… 0/${comp.count}`;
+  compStatus.textContent = t("msg.clickContacts", {count: comp.count, type: pickLabel(pick), done: 0});
   updateCompAddButton();
   drawOverlay();
   drawToolLayer();
 };
 
 function pickLabel(p) {
-  return p === "pad" ? "майданчики" : p === "hole" ? "отвори" : "точки";
+  return p === "pad" ? t("msg.pick.pads") : p === "hole" ? t("msg.pick.holes") : t("msg.pick.point");
 }
 
 function updateCompAddButton() {
@@ -2547,7 +2547,7 @@ function updateCompAddButton() {
     hint.style.display = compPickType.value === "point" ? "none" : "block";
   }
   compAddBtn.disabled = !!pendingComponent;
-  compAddBtn.textContent = pendingComponent ? "Розміщення…" : "+ Додати компонент";
+  compAddBtn.textContent = pendingComponent ? t("msg.placeRunning") : t("det.add");
 }
 
 /* register a click while placing a component */
@@ -2571,7 +2571,7 @@ function handleComponentClick(ip) {
   const dup = c.clicks.find(q => Math.hypot(q.x - pt.x, q.y - pt.y) < Math.max(2, (pt.r || 3) * 0.8));
   if (dup) {
     compStatus.className = "status err";
-    compStatus.textContent = "Цей отвір уже позначено — клікніть наступний";
+    compStatus.textContent = t("msg.holeMarked");
     drawOverlay(); drawToolLayer();
     return true;
   }
@@ -2583,10 +2583,10 @@ function handleComponentClick(ip) {
     components.push(c);
     pendingComponent = null;
     compStatus.className = "status ok";
-    compStatus.textContent = `Компонент «${c.name}» додано (${c.count} контактів)`;
+    compStatus.textContent = t("msg.compAdded", {name: c.name, count: c.count});
     renderComponentList();
   } else {
-    compStatus.textContent = `Клікніть ${c.count} контактів по черзі (${pickLabel(c.pickType)})… ${c.clicks.length}/${c.count}`;
+    compStatus.textContent = t("msg.clickContacts", {count: c.count, type: pickLabel(c.pickType), done: c.clicks.length});
   }
   updateCompAddButton();
   updateAlignButton();
@@ -2606,7 +2606,7 @@ function renderComponentList() {
     const el = document.createElement("div");
     el.className = "det-item";
     el.innerHTML = `<span class="tag">${c.name}</span>
-      <span class="conf">${c.clicks.length} кл. <button class="comp-del" data-i="${i}" title="Видалити" style="border:none;background:transparent;color:#dc2626;cursor:pointer;font-weight:700;padding:0 4px;">✕</button></span>`;
+      <span class="conf">${c.clicks.length} <button class="comp-del" data-i="${i}" title="' + t("msg.delete") + '" style="border:none;background:transparent;color:#dc2626;cursor:pointer;font-weight:700;padding:0 4px;">✕</button></span>`;
     el.style.cursor = "pointer";
     el.onclick = (e) => {
       if (e.target.classList.contains("comp-del")) return;
@@ -2684,10 +2684,10 @@ function mean(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; }
 
 document.getElementById("compAlignBtn").onclick = () => {
   const st = document.getElementById("compAlignStatus");
-  if (!doc) { st.className = "status err"; st.textContent = "Спочатку відкрийте файл"; return; }
+  if (!doc) { st.className = "status err"; st.textContent = t("msg.openFirst2"); return; }
   if (components.length === 0) {
     st.className = "status err";
-    st.textContent = "Додайте хоча б один компонент";
+    st.textContent = t("msg.addCompFirst");
     return;
   }
 
@@ -2700,7 +2700,7 @@ document.getElementById("compAlignBtn").onclick = () => {
       angles.push(s.angle);
     }
   });
-  if (!ests.length) { st.className = "status err"; st.textContent = "Недостатньо даних"; return; }
+  if (!ests.length) { st.className = "status err"; st.textContent = t("msg.noData"); return; }
 
   // weighted median-ish: use median for robustness, report spread
   const sorted = [...ests].sort((a, b) => a - b);
@@ -2754,19 +2754,19 @@ document.getElementById("compAlignBtn").onclick = () => {
 
   const afterW = doc.canvas.width, afterH = doc.canvas.height;
   const mmW = afterW / TARGET_PX_PER_MM, mmH = afterH / TARGET_PX_PER_MM;
-  const sizeStr = `${mmW.toFixed(1)} × ${mmH.toFixed(1)} мм`;
+  const sizeStr = `${mmW.toFixed(1)} × ${mmH.toFixed(1)}${t("msg.mm")}`;
 
   st.className = "status ok";
   st.innerHTML =
-    `Виміряно: <b>${median.toFixed(2)} px/мм</b> (${(median*25.4).toFixed(0)} DPI)<br>` +
-    `Розмір: <b>${sizeStr}</b> · нормалізовано до 1:1 ` +
-    `(${TARGET_PX_PER_MM} px/мм)` +
-    (angleDeg ? `<br>Поворот: ${(-angleDeg).toFixed(2)}°` : "") +
-    (beforePx == null ? `<br><span style="color:var(--muted)">Було: невідомий масштаб</span>` :
-      `<br><span style="color:var(--muted)">Було: ${beforeW}×${beforeH} px</span>`) +
-    `<br><span style="color:var(--muted)">Стало: ${afterW}×${afterH} px</span>` +
-    (spread > 0.1 ? `<br><span style="color:var(--danger)">Увага: розбіг ${(spread*100).toFixed(0)}% — перевірте кліки</span>` : "");
-  toast(`Розмір: ${sizeStr}`);
+    t("msg.measuring") + `<b>${median.toFixed(2)}${t("msg.ppmLabel")}</b> (${(median*25.4).toFixed(0)} DPI)<br>` +
+    t("msg.resizedNorm") + `<b>${sizeStr}</b>` + t("msg.normTo1") +
+    `(${TARGET_PX_PER_MM}${t("msg.ppmLabel")})` +
+    (angleDeg ? `<br>` + t("msg.rotation") + `${(-angleDeg).toFixed(2)}°` : "") +
+    (beforePx == null ? `<br><span style="color:var(--muted)">${t("msg.wasNoScale")}</span>` :
+      `<br><span style="color:var(--muted)">${t("msg.wasSize")}${beforeW}×${beforeH}${t("msg.px")}</span>`) +
+    `<br><span style="color:var(--muted)">${t("msg.nowSize")}${afterW}×${afterH}${t("msg.px")}</span>` +
+    (spread > 0.1 ? `<br><span style="color:var(--danger)">${t("msg.spread", {pct: (spread*100).toFixed(0)})}</span>` : "");
+  toast(t("msg.resized") + sizeStr);
 };
 
 /* background colour sampler for rotation */
@@ -2859,9 +2859,9 @@ async function getProcessedCanvas(targetDPI) {
 }
 
 document.getElementById("exportPngBtn").onclick = async () => {
-  if (!doc) { toast("Немає файлу"); return; }
+  if (!doc) { toast(t("msg.noFile")); return; }
   const st = document.getElementById("exportStatus");
-  st.textContent = "Рендер PNG…";
+  st.textContent = t("msg.pngRender");
   try {
     const dpi = parseInt(document.getElementById("pngDpi").value, 10);
     const out = await getProcessedCanvas(dpi);
@@ -2869,14 +2869,14 @@ document.getElementById("exportPngBtn").onclick = async () => {
     a.download = `pcb_${dpi}dpi.png`;
     a.href = out.toDataURL("image/png");
     a.click();
-    st.textContent = `Готово: ${out.width}×${out.height} px`;
-  } catch (e) { st.textContent = "Помилка: " + e.message; }
+    st.textContent = t("msg.perpDone") + `${out.width}×${out.height}px`;
+  } catch (e) { st.textContent = t("msg.error") + e.message; }
 };
 
 document.getElementById("exportPdfBtn").onclick = async () => {
-  if (!doc) { toast("Немає файлу"); return; }
+  if (!doc) { toast(t("msg.noFile")); return; }
   const st = document.getElementById("exportStatus");
-  st.textContent = "Рендер PDF…";
+  st.textContent = t("msg.pdfRender");
   try {
     const dpi = parseInt(document.getElementById("pdfDpi").value, 10);
     const out = await getProcessedCanvas(dpi);
@@ -2892,8 +2892,8 @@ document.getElementById("exportPdfBtn").onclick = async () => {
     a.download = `pcb_${dpi}dpi.pdf`;
     a.href = URL.createObjectURL(new Blob([await pdfDoc.save()], { type: "application/pdf" }));
     a.click();
-    st.textContent = `Готово: ${pageW.toFixed(1)}×${pageH.toFixed(1)} pt`;
-  } catch (e) { st.textContent = "Помилка: " + e.message; }
+    st.textContent = t("msg.perpDone") + `${pageW.toFixed(1)}×${pageH.toFixed(1)} pt`;
+  } catch (e) { st.textContent = t("msg.error") + e.message; }
 };
 
 /* ============================================================
@@ -3472,9 +3472,9 @@ function paintBegin() {
 // whole canvas, which doubled the cost of every mouse-up.)
 function paintUndoLast() {
   if (!doc) return;
-  if (!history.length) { toast("Нема що скасовувати", 1600); return; }
+  if (!history.length) { toast(t("msg.noUndo"), 1600); return; }
   undo();
-  toast("Мазок скасовано", 1500);
+  toast(t("msg.strokeUndone"), 1500);
 }
 
 // Commit the draft stroke/line to the bitmap.
@@ -3664,10 +3664,10 @@ function binSetMode(mode) {
     b.classList.toggle("active-mode", b.dataset.binmode === mode));
   const hint = document.getElementById("binModeHint");
   if (hint) hint.textContent = mode === "luma"
-    ? "Простий поріг яскравості. Гарно для чистого ч/б скану."
+    ? t("msg.binLumaBest")
     : mode === "color"
-      ? "За кольором зразка. Найкраще для кольорового фото плати."
-      : "Локальна адаптація. Вирівнює нерівне освітлення по площі.";
+      ? t("msg.binPickColor")
+      : t("msg.binAdaptBest");
   document.getElementById("binAdaptField").style.display = mode === "adaptive" ? "block" : "none";
   binInvalidate();
 }
@@ -3677,14 +3677,14 @@ document.querySelectorAll("#binModeRow .btn").forEach(b => {
 
 const binPickBtn = document.getElementById("binPickBtn");
 binPickBtn.onclick = () => {
-  if (!doc) { toast("Спершу відкрийте файл", 2500); return; }
+  if (!doc) { toast(t("msg.openFirst2"), 2500); return; }
   binState.picking = true;
   document.body.classList.add("picking-trace");
   setCursor("crosshair");
   if (binState.sample && !binState.sample2) {
-    toast("Тицніть у доріжку іншого кольору (або ✕ щоб скасувати)", 3200);
+    toast(t("msg.pickTrace2"), 3200);
   } else {
-    toast("Тицніть у доріжку на платі", 3000);
+    toast(t("msg.pickTrace"), 3000);
   }
 };
 
@@ -3694,7 +3694,7 @@ function binClearSample() {
   binState.picking = false;
   document.body.classList.remove("picking-trace");
   document.getElementById("binThumb").style.background = "";
-  document.getElementById("binMeta").textContent = "не вибрано";
+  document.getElementById("binMeta").textContent = t("bin.none");
   document.getElementById("binSample2Row").style.display = "none";
   document.getElementById("binPickReset").disabled = true;
   binInvalidate();
@@ -3706,7 +3706,7 @@ document.getElementById("binPickReset2").onclick = () => {
   binState.sample2 = null;
   document.getElementById("binSample2Row").style.display = "none";
   binInvalidate();
-  toast("Другий зразок прибрано", 1800);
+  toast(t("msg.sampleRemoved"), 1800);
 };
 
 // Called from the stage click handler while the eyedropper is armed.
@@ -3722,7 +3722,7 @@ function binHandlePick(ip) {
     if (near) {
       binState.picking = false;
       document.body.classList.remove("picking-trace");
-      toast("Це той самий колір — другий зразок не потрібен", 2600);
+      toast(t("msg.sameColor"), 2600);
       binInvalidate();
       return true;
     }
@@ -3760,11 +3760,11 @@ function binHandlePick(ip) {
   binInvalidate();
 
   if (isSecond) {
-    toast("Другий зразок узято. Обидва кольори йдуть в одну маску.", 3000);
+    toast(t("msg.sample2Added"), 3000);
   } else if (binState.sample2) {
-    toast(`Зразок узято. Поріг ≈ ${binState.thresh}`, 2600);
+    toast(t("msg.sampleOne") + binState.thresh, 2600);
   } else {
-    toast(`Зразок узято. Поріг ≈ ${binState.thresh}. Можна вказати ще один колір.`, 3200);
+    toast(t("msg.sampleOne") + binState.thresh + t("msg.sampleOneMore"), 3200);
   }
   return true;
 }
@@ -3802,7 +3802,7 @@ document.getElementById("binPreviewToggle").onclick = () => {
   // the button carries an icon + <span>, so only the label is rewritten —
   // assigning textContent to the button would wipe the svg
   const lbl = document.querySelector("#binPreviewToggle span");
-  if (lbl) lbl.textContent = binState.preview ? "Оригінал" : "Результат";
+  if (lbl) lbl.textContent = binState.preview ? t("bin.preview") : t("bin.result");
   const svg = document.querySelector("#binPreviewToggle svg");
   if (svg) svg.style.opacity = binState.preview ? "1" : ".5";
   render();
@@ -3811,7 +3811,7 @@ document.getElementById("binPreviewToggle").onclick = () => {
 document.getElementById("binApply").onclick = () => {
   if (!doc) return;
   if (!binState.result) buildBinary();
-  if (!binState.result) { toast("Немає результату", 2500); return; }
+  if (!binState.result) { toast(t("msg.noResult"), 2500); return; }
   pushHistory();
   const out = document.createElement("canvas");
   out.width = binState.result.width;
@@ -3825,7 +3825,7 @@ document.getElementById("binApply").onclick = () => {
   fitToView();
   render();
   syncScaleFields();
-  toast("Бінаризацію застосовано");
+  toast(t("msg.binApplied"));
 };
 
 document.getElementById("openBtn").onclick = () => document.getElementById("fileInput").click();
@@ -3867,7 +3867,7 @@ document.getElementById("resetBtn").onclick = () => {
   if (tool === "crop") initCrop();
   if (tool === "perspective") initPerspective();
   fitToView(); render();
-  toast("Скинуто до оригіналу");
+  toast(t("msg.resetDone"));
 };
 
 /* drag & drop */
@@ -3917,7 +3917,7 @@ window.addEventListener("keydown", (e) => {
       updateCompAddButton();
       const st = document.getElementById("compStatus");
       st.className = "status";
-      st.textContent = "Розміщення скасовано";
+      st.textContent = t("msg.placeCancelled");
       drawOverlay();
     }
     drawToolLayer();
@@ -3932,6 +3932,516 @@ window.addEventListener("resize", () => {
 });
 
 
+/* ============================================================
+   Localisation
+   Ukrainian is the source language: the uk column is the original text,
+   the en column the translation. Anything not listed here falls back to
+   the uk string, so a missing key degrades to readable text, not a blank.
+   ============================================================ */
+const I18N = {
+  uk: {
+    /* ---- tool rail ---- */
+    "tool.import": "Імпорт",
+    "tool.crop": "Обрізка",
+    "tool.perspective": "Перспектива",
+    "tool.scale": "Масштаб",
+    "tool.detect": "Компоненти",
+    "tool.binary": "Бінаризація",
+    "tool.paint": "Малювання",
+    "tool.export": "Експорт",
+    "tool.undo": "Відміна",
+    "tool.redo": "Повтор",
+    "tool.reset": "Скинути",
+    "tool.settings": "Ще",
+    "tool.import.tip": "Імпорт файлу та глобальні налаштування (V)",
+    "tool.crop.tip": "Обрізка прямокутною рамкою (C)",
+    "tool.perspective.tip": "Перспектива — випрямлення за 4 кутами (P)",
+    "tool.scale.tip": "Масштаб за розмірами (S)",
+    "tool.detect.tip": "Компоненти для калібрування (D)",
+    "tool.binary.tip": "Бінаризація — виділити доріжки (B)",
+    "tool.paint.tip": "Малювання — пензель, лінія, заливка, гумка (M)",
+    "tool.export.tip": "Експорт PNG / PDF (E)",
+    "tool.undo.tip": "Скасувати останню дію (Ctrl+Z)",
+    "tool.redo.tip": "Повторити скасовану дію (Ctrl+Shift+Z)",
+    "tool.reset.tip": "Скинути до оригіналу",
+    "tool.settings.tip": "Налаштування — мова та тема",
+
+    /* ---- settings popover ---- */
+    "set.title": "Налаштування",
+    "set.theme": "Тема",
+    "set.light": "Світла",
+    "set.dark": "Темна",
+    "set.lang": "Мова",
+    "set.close": "Закрити",
+
+    /* ---- drop hint / stage ---- */
+    "drop.title": "Перетягніть PDF або зображення",
+    "drop.sub": "або натисніть кнопку «Відкрити файл» праворуч",
+    "cs.img": "зобр.",
+    "cs.px": "px",
+    "cs.frame": "рамка",
+
+    /* ---- import pane ---- */
+    "panel.file": "Файл",
+    "imp.open": "Відкрити файл",
+    "imp.dilate": "Приріст (дилатація), px",
+    "imp.invert": "Інверсія (негатив)",
+    "imp.units": "Одиниці розміру",
+    "imp.mm": "мм",
+    "imp.inch": "дюйм",
+    "imp.mm.tip": "Міліметри",
+    "imp.inch.tip": "Дюйми",
+    "size.undef": "Масштаб: не визначено",
+
+    /* ---- crop pane ---- */
+    "crop.hint": "Тягніть за кути або краї рамки. Потім натисніть «Застосувати».",
+    "crop.frameSize": "розмір рамки",
+    "crop.round": "Округлити розмір рамки",
+    "round.floor.tip": "Округлити вниз (124.9 → 124)",
+    "round.round.tip": "Округлити до найближчого (124.9 → 125)",
+    "round.ceil.tip": "Округлити вгору (124.1 → 125)",
+    "crop.apply": "Застосувати обрізку",
+    "crop.reset": "Скинути рамку",
+
+    /* ---- perspective pane ---- */
+    "persp.hint": "Перетягніть 4 кути так, щоб вони лягли на кути плати на фото. Потім «Випрямити».",
+    "persp.auto": "Автоматично визначати кути",
+    "persp.outSize": "Вихідний розмір",
+    "persp.w": "W, мм",
+    "persp.h": "H, мм",
+    "persp.empty": "Порожньо = взяти з розміру рамки.",
+    "persp.apply": "Випрямити",
+    "persp.reset": "Скинути кути",
+
+    /* ---- scale pane ---- */
+    "scale.hint": "Приведіть усе зображення до відомих розмірів у мм.",
+    "scale.mode": "Режим",
+    "scale.mode.wh": "Ширина + висота",
+    "scale.mode.two": "Відстань між двома точками",
+    "scale.width": "Ширина, мм",
+    "scale.height": "Висота, мм",
+    "scale.lock": "Зберігати пропорції",
+    "scale.roundTo": "Округлити до цілих мм",
+    "scale.roundHint": "Округлення розміру до цілих міліметрів.",
+    "scale.apply": "Застосувати",
+    "scale.twoHint": "Клікніть 2 точки на зображенні, потім введіть реальну відстань.",
+    "scale.dist": "Реальна відстань, мм",
+    "scale.twoReset": "Скинути точки",
+    "scale.current": "Поточний масштаб",
+    "scale.ppm": "px / мм",
+
+    /* ---- detect pane ---- */
+    "det.hint": "Додайте відомі компоненти — за ними інструмент визначить масштаб і вирівняє зображення. Автоматика не використовується: усе задаєте ви.",
+    "det.pickType": "Тип вибору",
+    "det.pads": "Майданчики (SMD)",
+    "det.holes": "Отвори (наскрізні)",
+    "det.point": "Точка",
+    "det.comp": "Компонент",
+    "det.pitchLine": "Лінія з кроком…",
+    "det.pitch": "Крок",
+    "det.count": "Кількість контактів",
+    "det.add": "+ Додати компонент",
+    "det.snapHint": "Тисніть приблизно в отвір — центр знайдеться сам за схожим кольором, товщина кліку не важлива.",
+    "det.align": "Вирівняти за компонентами",
+
+    /* ---- binary pane ---- */
+    "bin.hint": "Відділіть доріжки від плати. Візьміть піпеткою колір доріжки — інструмент підбере поріг сам. Далі підстроюєте повзунками.",
+    "bin.samples": "Зразки доріжок",
+    "bin.samplesCan2": "(можна два)",
+    "bin.pick": "Піпетка",
+    "bin.pick.tip": "Взяти колір доріжки піпеткою",
+    "bin.pickReset.tip": "Скинути обидва зразки",
+    "bin.pickReset2.tip": "Прибрати другий зразок",
+    "bin.none": "не вибрано",
+    "bin.twoHint": "Два зразки — коли на платі доріжки різного кольору: беруться обидва, поріг спільний.",
+    "bin.mode": "Режим відділення",
+    "bin.mode.luma": "Світло",
+    "bin.mode.luma.tip": "За яскравістю (чорне/біле)",
+    "bin.mode.color": "Колір",
+    "bin.mode.color.tip": "За кольором (відтінок + насиченість)",
+    "bin.mode.adaptive": "Авто",
+    "bin.mode.adaptive.tip": "Локальна адаптація — рівномірно на нерівному фоні",
+    "bin.thresh": "Поріг",
+    "bin.soft": "Навкруги (м'який край)",
+    "bin.adapt": "Радіус адаптації, px",
+    "bin.denoise": "Дрібний шум",
+    "bin.denoiseHint": "Прибирає окремі точки й піщинки. Тонкі доріжки не зникають. Великі значення — для брудного фону.",
+    "bin.invert": "Інвертувати (негатив)",
+    "bin.coverage": "заливка дорижок",
+    "bin.apply": "Застосувати",
+    "bin.preview": "Оригінал",
+    "bin.result": "Результат",
+
+    /* ---- paint pane ---- */
+    "paint.hint": "Зафарбуйте або виправте вручну: пензель, лінія, заливка, гумка. Діє на чорне/біле — як на граверах.",
+    "paint.tool": "Інструмент",
+    "paint.brush.tip": "Пензель (B)",
+    "paint.line.tip": "Пряма лінія (L)",
+    "paint.fill.tip": "Заливка області (F)",
+    "paint.erase.tip": "Гумка (E)",
+    "paint.size": "Розмір, px",
+    "paint.shape": "Форма пензля",
+    "paint.round.tip": "Круглий пензель",
+    "paint.square.tip": "Квадратний пензель",
+    "paint.color": "Колір",
+    "paint.black": "Чорний",
+    "paint.white": "Білий",
+    "paint.black.tip": "Чорний — додати",
+    "paint.white.tip": "Білий — прибрати",
+    "paint.onlyBad": "Малювати лише по «поганому» (за порогом)",
+    "paint.snap": "Вирівнювати лінію по осях (Shift)",
+    "paint.view": "Перегляд",
+    "paint.view.edit": "Результат",
+    "paint.view.edit.tip": "Малювати по результату",
+    "paint.view.photo": "Оригінал",
+    "paint.view.photo.tip": "Дивитись оригінал",
+    "paint.opacity": "Прозорість",
+    "paint.ghostHint": "Оригінал показує фото під бітмапом. Прозорість — скільки видно результат: 0 % = тільки фото, 100 % = тільки результат.",
+    "paint.level": "Пороговий шар",
+    "paint.levelFor": "(для заливки)",
+    "paint.undo": "Скасувати останній мазок",
+    "paint.altHint": "Alt + клік — піпетка: бере колір під курсором як чорний/білий.",
+
+    /* ---- export pane ---- */
+    "exp.hint": "Експорт у растрові формати для гравіювання.",
+    "exp.pngDpi": "PNG — роздільність",
+    "exp.pdfDpi": "PDF — DPI растру",
+    "exp.png": "Експорт PNG",
+    "exp.pdf": "Експорт PDF",
+    "dpi.300.preview": "300 DPI (прев'ю)",
+    "dpi.1000": "1000 DPI (якісно)",
+    "dpi.1200": "1200 DPI (гравера)",
+
+    /* ---- runtime messages ---- */
+    "msg.fileLoaded": "Файл завантажено",
+    "msg.fileOpenFail": "Не вдалося відкрити файл: ",
+    "msg.error": "Помилка: ",
+    "msg.noFile": "Немає файлу",
+    "msg.openFirst": "Спочатку відкрийте файл",
+    "msg.openFirst2": "Спершу відкрийте файл",
+    "msg.noUndo": "Нема що скасовувати",
+    "msg.strokeUndone": "Мазок скасовано",
+    "msg.undone": "Скасовано",
+    "msg.redone": "Повторено",
+    "msg.resetDone": "Скинуто до оригіналу",
+    "msg.frameTooSmall": "Рамка занадто мала",
+    "msg.cropped": "Обрізано: ",
+    "msg.perspDone": "Перспективу випрямлено: ",
+    "msg.perspRunning": "Випрямлення…",
+    "msg.perpDone": "Готово: ",
+    "msg.resized": "Розмір: ",
+    "msg.resizedNorm": "Розмір: ",
+    "msg.normTo1": " · нормалізовано до 1:1",
+    "msg.roundedWhole": " (округлено до цілих пікселів)",
+    "msg.sizeFail": "Не вдалося змінити розмір",
+    "msg.sizeZero": "Розмір має бути більше нуля",
+    "msg.sizeUnder1mm": "Результат менший за 1 мм",
+    "msg.enterSize": "Введіть хоча б один розмір",
+    "msg.actual": "Фактично: ",
+    "msg.scaleUnknown": "Спершу визначте масштаб",
+    "msg.scaleUnknownDetect": "Спершу визначте масштаб (інструмент «Компоненти»)",
+    "msg.scaleSet": "Масштаб встановлено: ",
+    "msg.enterDistance": "Введіть реальну відстань",
+    "msg.pointsClose": "Точки занадто близько",
+    "msg.noData": "Недостатньо даних",
+    "msg.binApplied": "Бінаризацію застосовано",
+    "msg.noResult": "Немає результату",
+    "msg.pickTrace": "Тицніть у доріжку на платі",
+    "msg.pickTrace2": "Тицніть у доріжку іншого кольору (або ✕ щоб скасувати)",
+    "msg.sameColor": "Це той самий колір — другий зразок не потрібен",
+    "msg.sample2Added": "Другий зразок узято. Обидва кольори йдуть в одну маску.",
+    "msg.sampleRemoved": "Другий зразок прибрано",
+    "msg.sampleOne": "Зразок узято. Поріг ≈ ",
+    "msg.sampleOneMore": ". Можна вказати ще один колір.",
+    "msg.pickBlack": "Колір зразка: чорний",
+    "msg.pickWhite": "Колір зразка: білий",
+    "msg.enterPitch": "Введіть крок",
+    "msg.holeMarked": "Цей отвір уже позначено — клікніть наступний",
+    "msg.compAdded": "«{name}» додано ({count} контактів)",
+    "msg.addCompFirst": "Додайте хоча б один компонент",
+    "msg.clickContacts": "Клікніть {count} контактів по черзі ({type})… {done}/{count}",
+    "msg.linePitch": "Лінія {count}×{pitch}",
+    "msg.placeRunning": "Розміщення…",
+    "msg.placeCancelled": "Розміщення скасовано",
+    "msg.pdfRender": "Рендер PDF…",
+    "msg.pngRender": "Рендер PNG…",
+    "msg.measuring": "Виміряно: ",
+    "msg.spread": "Увага: розбіг {pct}% — перевірте кліки",
+    "msg.wasSize": "Було: ",
+    "msg.wasNoScale": "Було: невідомий масштаб",
+    "msg.nowSize": "Стало: ",
+    "msg.rotation": "Поворот: ",
+    "msg.ppmUnknown": "px / мм: невідомо",
+    "msg.delete": "Видалити",
+    "msg.frame": "Рамка: ",
+    "msg.unitInch": "дюйм",
+    "msg.unitMm": "мм",
+    "msg.pick.pads": "майданчики",
+    "msg.pick.holes": "отвори",
+    "msg.pick.point": "точки",
+    "msg.binColorBest": "Колір — найкраще для кольорового фото плати.",
+    "msg.binLumaBest": "Простий поріг яскравості. Гарно для чистого ч/б скану.",
+    "msg.binAdaptBest": "Локальна адаптація. Вирівнює нерівне освітлення по площі.",
+    "msg.binPickColor": "За кольором зразка. Найкраще для кольорового фото плати.",
+    "msg.ppmLabel": " px/мм",
+    "msg.dpiLabel": " DPI",
+    "msg.px": " px",
+    "msg.mm": " мм",
+    "msg.percent": "%",
+  },
+
+  en: {
+    /* ---- tool rail ---- */
+    "tool.import": "Import",
+    "tool.crop": "Crop",
+    "tool.perspective": "Perspective",
+    "tool.scale": "Scale",
+    "tool.detect": "Components",
+    "tool.binary": "Binarize",
+    "tool.paint": "Paint",
+    "tool.export": "Export",
+    "tool.undo": "Undo",
+    "tool.redo": "Redo",
+    "tool.reset": "Reset",
+    "tool.settings": "More",
+    "tool.import.tip": "Import a file and global settings (V)",
+    "tool.crop.tip": "Crop with a rectangular frame (C)",
+    "tool.perspective.tip": "Perspective — straighten by 4 corners (P)",
+    "tool.scale.tip": "Scale by known dimensions (S)",
+    "tool.detect.tip": "Components for calibration (D)",
+    "tool.binary.tip": "Binarize — isolate the traces (B)",
+    "tool.paint.tip": "Paint — brush, line, fill, eraser (M)",
+    "tool.export.tip": "Export PNG / PDF (E)",
+    "tool.undo.tip": "Undo the last action (Ctrl+Z)",
+    "tool.redo.tip": "Redo the undone action (Ctrl+Shift+Z)",
+    "tool.reset.tip": "Reset to the original",
+    "tool.settings.tip": "Settings — language and theme",
+
+    /* ---- settings popover ---- */
+    "set.title": "Settings",
+    "set.theme": "Theme",
+    "set.light": "Light",
+    "set.dark": "Dark",
+    "set.lang": "Language",
+    "set.close": "Close",
+
+    /* ---- drop hint / stage ---- */
+    "drop.title": "Drop a PDF or an image",
+    "drop.sub": "or press “Open file” on the right",
+    "cs.img": "img",
+    "cs.px": "px",
+    "cs.frame": "frame",
+
+    /* ---- import pane ---- */
+    "panel.file": "File",
+    "imp.open": "Open file",
+    "imp.dilate": "Grow (dilate), px",
+    "imp.invert": "Invert (negative)",
+    "imp.units": "Size units",
+    "imp.mm": "mm",
+    "imp.inch": "inch",
+    "imp.mm.tip": "Millimetres",
+    "imp.inch.tip": "Inches",
+    "size.undef": "Scale: not set",
+
+    /* ---- crop pane ---- */
+    "crop.hint": "Drag the corners or edges of the frame, then press “Apply”.",
+    "crop.frameSize": "frame size",
+    "crop.round": "Round the frame size",
+    "round.floor.tip": "Round down (124.9 → 124)",
+    "round.round.tip": "Round to nearest (124.9 → 125)",
+    "round.ceil.tip": "Round up (124.1 → 125)",
+    "crop.apply": "Apply crop",
+    "crop.reset": "Reset frame",
+
+    /* ---- perspective pane ---- */
+    "persp.hint": "Drag the 4 corners onto the corners of the board in the photo, then “Straighten”.",
+    "persp.auto": "Detect corners automatically",
+    "persp.outSize": "Output size",
+    "persp.w": "W, mm",
+    "persp.h": "H, mm",
+    "persp.empty": "Empty = take from the frame size.",
+    "persp.apply": "Straighten",
+    "persp.reset": "Reset corners",
+
+    /* ---- scale pane ---- */
+    "scale.hint": "Bring the whole image to known dimensions in mm.",
+    "scale.mode": "Mode",
+    "scale.mode.wh": "Width + height",
+    "scale.mode.two": "Distance between two points",
+    "scale.width": "Width, mm",
+    "scale.height": "Height, mm",
+    "scale.lock": "Keep proportions",
+    "scale.roundTo": "Round to whole mm",
+    "scale.roundHint": "Rounds the size to whole millimetres.",
+    "scale.apply": "Apply",
+    "scale.twoHint": "Click 2 points on the image, then type the real distance.",
+    "scale.dist": "Real distance, mm",
+    "scale.twoReset": "Reset points",
+    "scale.current": "Current scale",
+    "scale.ppm": "px / mm",
+
+    /* ---- detect pane ---- */
+    "det.hint": "Add known components — the tool derives the scale from them and aligns the image. No automation: you set everything.",
+    "det.pickType": "Pick type",
+    "det.pads": "Pads (SMD)",
+    "det.holes": "Holes (through)",
+    "det.point": "Point",
+    "det.comp": "Component",
+    "det.pitchLine": "Pitch line…",
+    "det.pitch": "Pitch",
+    "det.count": "Contact count",
+    "det.add": "+ Add component",
+    "det.snapHint": "Click roughly on the hole — the centre is found by similar colour, click thickness does not matter.",
+    "det.align": "Align by components",
+
+    /* ---- binary pane ---- */
+    "bin.hint": "Separate traces from the board. Pick the trace colour with the eyedropper — the threshold is chosen for you. Then fine-tune with the sliders.",
+    "bin.samples": "Trace samples",
+    "bin.samplesCan2": "(two allowed)",
+    "bin.pick": "Eyedropper",
+    "bin.pick.tip": "Pick the trace colour with the eyedropper",
+    "bin.pickReset.tip": "Reset both samples",
+    "bin.pickReset2.tip": "Remove the second sample",
+    "bin.none": "not selected",
+    "bin.twoHint": "Two samples — for boards with traces of different colours: both are used with a shared threshold.",
+    "bin.mode": "Separation mode",
+    "bin.mode.luma": "Bright",
+    "bin.mode.luma.tip": "By brightness (black/white)",
+    "bin.mode.color": "Colour",
+    "bin.mode.color.tip": "By colour (hue + saturation)",
+    "bin.mode.adaptive": "Auto",
+    "bin.mode.adaptive.tip": "Local adaptation — even on uneven backgrounds",
+    "bin.thresh": "Threshold",
+    "bin.soft": "Feather (soft edge)",
+    "bin.adapt": "Adaptation radius, px",
+    "bin.denoise": "Speckle noise",
+    "bin.denoiseHint": "Removes isolated dots and specks. Thin traces survive. High values are for dirty backgrounds.",
+    "bin.invert": "Invert (negative)",
+    "bin.coverage": "trace coverage",
+    "bin.apply": "Apply",
+    "bin.preview": "Original",
+    "bin.result": "Result",
+
+    /* ---- paint pane ---- */
+    "paint.hint": "Paint or fix by hand: brush, line, fill, eraser. Works on black/white — the way engravers do.",
+    "paint.tool": "Tool",
+    "paint.brush.tip": "Brush (B)",
+    "paint.line.tip": "Straight line (L)",
+    "paint.fill.tip": "Fill area (F)",
+    "paint.erase.tip": "Eraser (E)",
+    "paint.size": "Size, px",
+    "paint.shape": "Brush shape",
+    "paint.round.tip": "Round brush",
+    "paint.square.tip": "Square brush",
+    "paint.color": "Colour",
+    "paint.black": "Black",
+    "paint.white": "White",
+    "paint.black.tip": "Black — add",
+    "paint.white.tip": "White — remove",
+    "paint.onlyBad": "Paint only on “bad” areas (beyond the threshold)",
+    "paint.snap": "Snap the line to the axes (Shift)",
+    "paint.view": "View",
+    "paint.view.edit": "Result",
+    "paint.view.edit.tip": "Paint on the result",
+    "paint.view.photo": "Original",
+    "paint.view.photo.tip": "See the original photo",
+    "paint.opacity": "Opacity",
+    "paint.ghostHint": "The original shows the photo under the bitmap. Opacity is how much of the result you see: 0 % = photo only, 100 % = result only.",
+    "paint.level": "Threshold layer",
+    "paint.levelFor": "(for fill)",
+    "paint.undo": "Undo the last stroke",
+    "paint.altHint": "Alt + click — eyedropper: takes the colour under the cursor as black/white.",
+
+    /* ---- export pane ---- */
+    "exp.hint": "Export to raster formats for engraving.",
+    "exp.pngDpi": "PNG — resolution",
+    "exp.pdfDpi": "PDF — raster DPI",
+    "exp.png": "Export PNG",
+    "exp.pdf": "Export PDF",
+    "dpi.300.preview": "300 DPI (preview)",
+    "dpi.1000": "1000 DPI (high)",
+    "dpi.1200": "1200 DPI (engraver)",
+
+    /* ---- runtime messages ---- */
+    "msg.fileLoaded": "File loaded",
+    "msg.fileOpenFail": "Could not open the file: ",
+    "msg.error": "Error: ",
+    "msg.noFile": "No file",
+    "msg.openFirst": "Open a file first",
+    "msg.openFirst2": "Open a file first",
+    "msg.noUndo": "Nothing to undo",
+    "msg.strokeUndone": "Stroke undone",
+    "msg.undone": "Undone",
+    "msg.redone": "Redone",
+    "msg.resetDone": "Reset to the original",
+    "msg.frameTooSmall": "The frame is too small",
+    "msg.cropped": "Cropped: ",
+    "msg.perspDone": "Perspective straightened: ",
+    "msg.perspRunning": "Straightening…",
+    "msg.perpDone": "Done: ",
+    "msg.resized": "Size: ",
+    "msg.resizedNorm": "Size: ",
+    "msg.normTo1": " · normalised to 1:1",
+    "msg.roundedWhole": " (rounded to whole pixels)",
+    "msg.sizeFail": "Could not resize",
+    "msg.sizeZero": "Size must be greater than zero",
+    "msg.sizeUnder1mm": "The result is under 1 mm",
+    "msg.enterSize": "Enter at least one dimension",
+    "msg.actual": "Actual: ",
+    "msg.scaleUnknown": "Set the scale first",
+    "msg.scaleUnknownDetect": "Set the scale first (the “Components” tool)",
+    "msg.scaleSet": "Scale set: ",
+    "msg.enterDistance": "Enter the real distance",
+    "msg.pointsClose": "The points are too close",
+    "msg.noData": "Not enough data",
+    "msg.binApplied": "Binarisation applied",
+    "msg.noResult": "No result",
+    "msg.pickTrace": "Click a trace on the board",
+    "msg.pickTrace2": "Click a trace of another colour (or ✕ to cancel)",
+    "msg.sameColor": "That is the same colour — a second sample is not needed",
+    "msg.sample2Added": "Second sample taken. Both colours go into one mask.",
+    "msg.sampleRemoved": "Second sample removed",
+    "msg.sampleOne": "Sample taken. Threshold ≈ ",
+    "msg.sampleOneMore": ". You can add one more colour.",
+    "msg.pickBlack": "Sampled colour: black",
+    "msg.pickWhite": "Sampled colour: white",
+    "msg.enterPitch": "Enter the pitch",
+    "msg.holeMarked": "That hole is already marked — click the next one",
+    "msg.compAdded": "“{name}” added ({count} contacts)",
+    "msg.addCompFirst": "Add at least one component",
+    "msg.clickContacts": "Click {count} contacts in order ({type})… {done}/{count}",
+    "msg.linePitch": "Line {count}×{pitch}",
+    "msg.placeRunning": "Placing…",
+    "msg.placeCancelled": "Placement cancelled",
+    "msg.pdfRender": "Rendering PDF…",
+    "msg.pngRender": "Rendering PNG…",
+    "msg.measuring": "Measured: ",
+    "msg.spread": "Warning: spread {pct}% — check the clicks",
+    "msg.wasSize": "Was: ",
+    "msg.wasNoScale": "Was: unknown scale",
+    "msg.nowSize": "Now: ",
+    "msg.rotation": "Rotation: ",
+    "msg.ppmUnknown": "px / mm: unknown",
+    "msg.delete": "Delete",
+    "msg.frame": "Frame: ",
+    "msg.unitInch": "inch",
+    "msg.unitMm": "mm",
+    "msg.pick.pads": "pads",
+    "msg.pick.holes": "holes",
+    "msg.pick.point": "points",
+    "msg.binColorBest": "Colour — best for a colour photo of the board.",
+    "msg.binLumaBest": "Simple brightness threshold. Good for a clean B/W scan.",
+    "msg.binAdaptBest": "Local adaptation. Evens out uneven lighting across the area.",
+    "msg.binPickColor": "By the sampled colour. Best for a colour photo of the board.",
+    "msg.ppmLabel": " px/mm",
+    "msg.dpiLabel": " DPI",
+    "msg.px": " px",
+    "msg.mm": " mm",
+    "msg.percent": "%",
+  },
+};
+
 /* ---------------------------------------------------------------
    Appearance: theme (light/dark) + language, both kept in
    localStorage so the choice survives a reload.
@@ -3941,42 +4451,69 @@ const settingsBtn = document.getElementById("settingsBtn");
 const themeSeg = document.getElementById("themeSeg");
 const langSeg = document.getElementById("langSeg");
 
+let curLang = "uk";
+
+function t(key, vars) {
+  const dict = I18N[curLang] || I18N.uk;
+  let str = dict[key];
+  if (str === undefined) str = I18N.uk[key];
+  if (str === undefined) return key;
+  if (vars) for (const k in vars) str = str.split("{" + k + "}").join(vars[k]);
+  return str;
+}
+
 function applyTheme(name) {
   document.documentElement.setAttribute("data-theme", name);
   try { localStorage.setItem("pcb.theme", name); } catch (e) {}
-  themeSeg.querySelectorAll(".seg-btn").forEach(b =>
+  document.querySelectorAll("#themeSeg .seg-btn").forEach(b =>
     b.classList.toggle("active", b.dataset.themeOpt === name));
-  // the canvas stage backdrop changed, so repaint once
   if (doc) render();
 }
 
-const LANG = {
-  uk: {
-    import: "Імпорт", crop: "Обрізка", perspective: "Перспектива", scale: "Масштаб",
-    detect: "Компоненти", binary: "Бінаризація", paint: "Малювання", export: "Експорт",
-    undo: "Відміна", redo: "Повтор", reset: "Скинути", settings: "Ще",
-  },
-  en: {
-    import: "Import", crop: "Crop", perspective: "Perspective", scale: "Scale",
-    detect: "Components", binary: "Binarize", paint: "Paint", export: "Export",
-    undo: "Undo", redo: "Redo", reset: "Reset", settings: "More",
-  },
-};
-
 function applyLang(code) {
-  const dict = LANG[code] || LANG.uk;
-  document.documentElement.setAttribute("lang", code);
-  document.querySelectorAll(".rail-btn[data-tool], #undoBtn, #redoBtn, #resetBtn, #settingsBtn")
-    .forEach(btn => {
-      const key = btn.dataset.tool || (btn.id === "undoBtn" ? "undo"
-        : btn.id === "redoBtn" ? "redo"
-        : btn.id === "resetBtn" ? "reset" : "settings");
-      const span = btn.querySelector("span");
-      if (span && dict[key]) span.textContent = dict[key];
-    });
-  try { localStorage.setItem("pcb.lang", code); } catch (e) {}
-  langSeg.querySelectorAll(".seg-btn").forEach(b =>
-    b.classList.toggle("active", b.dataset.langOpt === code));
+  curLang = I18N[code] ? code : "uk";
+  document.documentElement.setAttribute("lang", curLang);
+
+  // markup-driven strings
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-tip]").forEach(el => {
+    el.setAttribute("title", t(el.dataset.i18nTip));
+  });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => {
+    el.setAttribute("placeholder", t(el.dataset.i18nPh));
+  });
+  document.querySelectorAll("[data-i18n-aria]").forEach(el => {
+    el.setAttribute("aria-label", t(el.dataset.i18nAria));
+  });
+  // option labels inside selects carry their own key
+  document.querySelectorAll("option[data-i18n]").forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+
+  try { localStorage.setItem("pcb.lang", curLang); } catch (e) {}
+  document.querySelectorAll("#langSeg .seg-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.langOpt === curLang));
+
+  // anything drawn by JS (size badges, hints, component list) is re-rendered
+  if (typeof refreshDynamicText === "function") refreshDynamicText();
+}
+
+// Re-renders every piece of text that lives in JS rather than in the markup.
+function refreshDynamicText() {
+  updateSizeLabel();
+  if (typeof syncScaleFields === "function") syncScaleFields();
+  if (typeof renderComponentList === "function") renderComponentList();
+  if (typeof updateAlignButton === "function") updateAlignButton();
+  if (typeof updateScaleTwoButton === "function") updateScaleTwoButton();
+  if (typeof binSetMode === "function") binSetMode(binState.mode);
+  if (typeof paintSetView === "function") {
+    document.getElementById("paintGhostVal").textContent = paint.ghost + "%";
+  }
+  const pv = document.querySelector("#binPreviewToggle span");
+  if (pv) pv.textContent = binState.preview ? t("bin.preview") : t("bin.result");
+  if (doc) { render(); updateSizeLabel(); }
 }
 
 function openSettings(open) {
@@ -4007,8 +4544,8 @@ document.addEventListener("keydown", (e) => {
     theme = localStorage.getItem("pcb.theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     lang = localStorage.getItem("pcb.lang") || "uk";
   } catch (e) {}
-  applyTheme(LANG[lang] ? theme : "light");
-  applyLang(LANG[lang] ? lang : "uk");
+  applyTheme(theme);
+  applyLang(lang);
 })();
 
 /* init */
