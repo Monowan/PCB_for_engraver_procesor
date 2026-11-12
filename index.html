@@ -125,6 +125,21 @@
   .slider-row output { min-width: 38px; text-align: right; font-variant-numeric: tabular-nums;
     font-weight: 700; }
 
+  /* binarize pane */
+  .bin-sample {
+    display: flex; align-items: center; gap: 9px; margin-top: 8px;
+    font-size: 12px; color: var(--muted);
+  }
+  .bin-thumb {
+    width: 26px; height: 26px; border-radius: 5px; flex: none;
+    border: 1px solid var(--border); background: repeating-conic-gradient(
+      #ddd 0% 25%, #fff 0% 50%) 50%/8px 8px;
+  }
+  #binModeRow .btn.active-mode {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  body.picking-trace #stage { cursor: crosshair !important; }
+
   .size-badge {
     background: var(--panel-bg); border: 1px solid var(--border);
     border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
@@ -225,6 +240,10 @@
     <button class="rail-btn" data-tool="detect" title="Компоненти для калібрування (D)">
       <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h8M8 18h8M6 8v8M18 8v8"/></svg>
       <span>Компоненти</span>
+    </button>
+    <button class="rail-btn" data-tool="binary" title="Бінаризація — виділити доріжки (B)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
+      <span>Бінаризація</span>
     </button>
     <button class="rail-btn" data-tool="export" title="Експорт PNG / PDF (E)">
       <svg viewBox="0 0 24 24"><path d="M12 19V7"/><path d="M7 12l5-5 5 5"/><path d="M4 4h16"/></svg>
@@ -430,6 +449,76 @@
       </div>
 
       <!-- ---- EXPORT ---- -->
+      <!-- ---- BINARIZE ---- -->
+      <div class="pane" data-pane="binary">
+        <p class="hint">Відділіть доріжки від плати. Візьміть піпеткою колір доріжки — інструмент підбере поріг сам. Далі підстроюєте повзунками.</p>
+
+        <div class="field">
+          <label>Зразок доріжки</label>
+          <div class="row2">
+            <button class="btn" id="binPickBtn" style="flex:1">Взяти піпеткою</button>
+            <button class="btn" id="binPickReset" title="Скинути зразок" disabled>✕</button>
+          </div>
+          <div id="binSample" class="bin-sample">
+            <span class="bin-thumb" id="binThumb"></span>
+            <span class="bin-meta" id="binMeta">не вибрано</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Режим відділення</label>
+          <div class="row3" id="binModeRow">
+            <button class="btn" data-binmode="luma" title="За яскравістю (чорне/біле)">Яскравість</button>
+            <button class="btn" data-binmode="color" title="За кольором (відтінок + насиченість)">Колір</button>
+            <button class="btn" data-binmode="adaptive" title="Локальна адаптація — рівномірно на нерівному фоні">Адаптив</button>
+          </div>
+          <p class="hint" style="margin:6px 0 0" id="binModeHint">Колір — найкраще для кольорового фото плати.</p>
+        </div>
+
+        <div class="field" id="binThreshField">
+          <label>Поріг</label>
+          <div class="slider-row">
+            <input type="range" id="binThresh" min="0" max="255" step="1" value="128">
+            <output id="binThreshVal">128</output>
+          </div>
+        </div>
+
+        <div class="field" id="binSoftField">
+          <label>Навкруги (м'який край)</label>
+          <div class="slider-row">
+            <input type="range" id="binSoft" min="0" max="30" step="1" value="0">
+            <output id="binSoftVal">0</output>
+          </div>
+        </div>
+
+        <div class="field" id="binAdaptField" style="display:none">
+          <label>Радіус адаптації, px</label>
+          <div class="slider-row">
+            <input type="range" id="binAdapt" min="4" max="80" step="1" value="25">
+            <output id="binAdaptVal">25</output>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Дрібний шум</label>
+          <div class="slider-row">
+            <input type="range" id="binDenoise" min="0" max="12" step="1" value="0">
+            <output id="binDenoiseVal">0</output>
+          </div>
+          <p class="hint" style="margin:6px 0 0">Прибирає окремі точки й піщинки. Тонкі доріжки не зникають.</p>
+        </div>
+
+        <label class="chk"><input type="checkbox" id="binInvert"> Інвертувати (негатив)</label>
+
+        <div class="size-badge" style="margin-top:12px">
+          <div class="big" id="binCoverage">—</div>
+          <div class="sub">заливка дорижок</div>
+        </div>
+
+        <button class="btn primary" id="binApply" style="margin-top:10px">Застосувати</button>
+        <button class="btn" id="binPreviewToggle" style="margin-top:6px">Оригінал</button>
+      </div>
+
       <div class="pane" data-pane="export">
         <p class="hint">Експорт у растрові формати для гравіювання.</p>
         <div class="field">
@@ -571,6 +660,7 @@ function render() {
 
   drawOverlay();
   drawToolLayer();
+  if (tool === "binary" && binState.preview && binState.result) drawBinaryPreview();
   updateSizeLabel();
 }
 
@@ -1028,11 +1118,17 @@ const toolButtons = [...document.querySelectorAll(".rail-btn[data-tool]")];
 toolButtons.forEach(b => b.onclick = () => switchTool(b.dataset.tool));
 
 function switchTool(name) {
-  if (!["import","crop","perspective","scale","detect","export"].includes(name)) return;
+  if (!["import","crop","perspective","scale","detect","binary","export"].includes(name)) return;
   tool = name;
   toolButtons.forEach(b => b.classList.toggle("active", b.dataset.tool === name));
   document.querySelectorAll(".pane").forEach(p =>
     p.classList.toggle("active", p.dataset.pane === name));
+
+  // leaving the binarizer: drop the eyedropper so it cannot fire elsewhere
+  if (name !== "binary" && binState.picking) {
+    binState.picking = false;
+    document.body.classList.remove("picking-trace");
+  }
 
   // init tool geometry
   if (doc) {
@@ -1044,10 +1140,12 @@ function switchTool(name) {
       renderComponentList();
       updateAlignButton();
     }
+    if (name === "binary") { binInvalidate(); }
   }
   canvasTools.style.pointerEvents = (name === "import") ? "none" : "auto";
   setCursor("default");
   render();
+  if (name === "binary") binSetMode(binState.mode);
 }
 
 function setCursor(c) { canvasTools.style.cursor = c; }
@@ -1179,6 +1277,12 @@ function onDown(e) {
     if (pendingComponent) handleComponentClick(ip);
     return;
   }
+
+  if (tool === "binary") {
+    // the eyedropper is armed: this click picks the trace colour
+    if (binState.picking) binHandlePick(ip);
+    return;
+  }
 }
 
 function onMove(e) {
@@ -1204,6 +1308,8 @@ function onMove(e) {
       setCursor(pendingComponent ? "crosshair" : "default");
       // live hole preview: highlight the circle under the cursor before clicking
       if (pendingComponent && pendingComponent.pickType !== "point") updateHolePreview(ip);
+    } else if (tool === "binary") {
+      setCursor(binState.picking ? "crosshair" : "default");
     }
     return;
   }
@@ -2379,8 +2485,479 @@ document.getElementById("exportPdfBtn").onclick = async () => {
 };
 
 /* ============================================================
+   BINARIZE — separate traces (copper) from the board
+   ------------------------------------------------------------
+   Colour photos are the hard case: brightness alone fails when the
+   substrate is dark and traces are bright (or vice versa). Three modes:
+     luma     — one global threshold on grayscale
+     color    — distance to the picked trace colour, in a hue/sat/val space
+     adaptive — local mean (like an integral image) so uneven lighting
+                does not eat one side of the board
+   The eyedropper picks the trace colour and auto-suggests a threshold by
+   looking at the surrounding ring, so the user starts close to correct.
+   ============================================================ */
+const binState = {
+  mode: "color",
+  sample: null,        // {r,g,b} picked colour
+  thresh: 128,
+  soft: 0,
+  adapt: 25,
+  denoise: 0,
+  invert: false,
+  picking: false,
+  preview: true,       // false = show the untouched original
+  result: null,        // cached binarized canvas
+  dirty: true,
+};
+
+// rgb -> hsv (h 0..360, s/v 0..1)
+function rgb2hsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d > 1e-6) {
+    if (mx === r) h = ((g - b) / d) % 6;
+    else if (mx === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: mx === 0 ? 0 : d / mx, v: mx };
+}
+
+// Distance between two colours for the colour mode. Hue is circular and
+// weighted heavily because copper vs green substrate differs mostly in hue;
+// value is weighted low so lighting does not dominate.
+function colorDistance(r1,g1,b1, r2,g2,b2) {
+  const a = rgb2hsv(r1,g1,b1), b = rgb2hsv(r2,g2,b2);
+  const chromaA = a.s * a.v, chromaB = b.s * b.v;
+  // near-grey pixels have no meaningful hue: compare brightness only
+  if (chromaA < 0.12 || chromaB < 0.12) {
+    const va = (r1 + g1 + b1) / 3, vb = (r2 + g2 + b2) / 3;
+    return Math.abs(va - vb);
+  }
+  let dh = Math.abs(a.h - b.h);
+  if (dh > 180) dh = 360 - dh;
+  const huePart = (dh / 180) * 200;      // 0..200
+  const satPart = Math.abs(a.s - b.s) * 60;
+  const valPart = Math.abs(a.v - b.v) * 60;
+  return Math.sqrt(huePart*huePart + satPart*satPart + valPart*valPart);
+}
+
+// Read a pixel colour straight from the pristine base so the pick is exact.
+function pickPixelAt(imgX, imgY) {
+  if (!doc) return null;
+  ensureBase();
+  const kx = doc.base.width / doc.canvas.width;
+  const ky = doc.base.height / doc.canvas.height;
+  const x = clamp(Math.round(imgX * kx), 0, doc.base.width - 1);
+  const y = clamp(Math.round(imgY * ky), 0, doc.base.height - 1);
+  const d = doc.base.getContext("2d").getImageData(x, y, 1, 1).data;
+  return { r: d[0], g: d[1], b: d[2] };
+}
+
+// Suggest a threshold from the picked colour: sample a ring around the click
+// and find where the "like the sample" cluster ends. Otsu is wrong here — the
+// trace cluster can be only a few percent of the window, so the split lands
+// near zero. Instead we walk the sorted distances and cut at the first real
+// gap, which is exactly the edge between trace and substrate.
+function suggestThreshold(imgX, imgY, sample) {
+  ensureBase();
+  const kx = doc.base.width / doc.canvas.width;
+  const ky = doc.base.height / doc.canvas.height;
+  const bw = doc.base.width, bh = doc.base.height;
+  const cx = clamp(Math.round(imgX * kx), 0, bw - 1);
+  const cy = clamp(Math.round(imgY * ky), 0, bh - 1);
+  // a generous window: large enough to contain substrate, small enough to
+  // avoid mixing several unrelated colours
+  const R = Math.max(12, Math.round(Math.min(bw, bh) * 0.12));
+  const x0 = clamp(cx - R, 0, bw - 1), y0 = clamp(cy - R, 0, bh - 1);
+  const w = clamp(R * 2 + 1, 1, bw - x0), h = clamp(R * 2 + 1, 1, bh - y0);
+  const data = doc.base.getContext("2d").getImageData(x0, y0, w, h).data;
+
+  const dists = [];
+  for (let i = 0; i < data.length; i += 4) {
+    dists.push(colorDistance(data[i], data[i+1], data[i+2], sample.r, sample.g, sample.b));
+  }
+  if (!dists.length) return 60;
+  dists.sort((a, b) => a - b);
+
+  const n = dists.length;
+  const maxD = dists[n - 1] || 1;
+  if (maxD < 8) return 8;                 // nothing differs from the sample
+
+  // Look for the largest relative jump in the sorted distances, but ignore
+  // the very bottom (the picked colour itself) and require a meaningful gap.
+  const startIdx = Math.max(1, Math.floor(n * 0.005));
+  let bestGap = 0, cut = dists[startIdx];
+  for (let i = startIdx; i < n - 1; i++) {
+    const gap = dists[i + 1] - dists[i];
+    // weight by the position: a real cluster boundary has a big gap
+    if (gap > bestGap && gap > maxD * 0.04) {
+      bestGap = gap;
+      cut = (dists[i] + dists[i + 1]) / 2;
+    }
+  }
+
+  // Not enough separation (uniform area): fall back to a fraction of the max,
+  // which separates "close to sample" from "far from sample" sensibly.
+  if (bestGap < maxD * 0.04) cut = maxD * 0.35;
+
+  return clamp(Math.round(cut), 1, 254);
+}
+
+// Two-pass running-sum box blur (O(1) per pixel, one float row buffer).
+// The integral-image version allocated a Float64Array the size of the whole
+// frame, which dominated the time on a 2000x1500 bitmap.
+function boxBlurFast(src, w, h, radius) {
+  const r = Math.max(1, Math.min(Math.round(radius), Math.max(1, Math.floor(Math.min(w, h) / 2) - 1)));
+  const tmp = new Float32Array(w * h);
+  const out = new Float32Array(w * h);
+  const span = 2 * r + 1;
+  // horizontal
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    let sum = 0;
+    for (let x = -r; x <= r; x++) sum += src[row + Math.min(w - 1, Math.max(0, x))];
+    for (let x = 0; x < w; x++) {
+      tmp[row + x] = sum / span;
+      const add = Math.min(w - 1, x + r + 1), sub = Math.max(0, x - r);
+      sum += src[row + add] - src[row + sub];
+    }
+  }
+  // vertical
+  for (let x = 0; x < w; x++) {
+    let sum = 0;
+    for (let y = -r; y <= r; y++) sum += tmp[Math.min(h - 1, Math.max(0, y)) * w + x];
+    for (let y = 0; y < h; y++) {
+      out[y * w + x] = sum / span;
+      const add = Math.min(h - 1, y + r + 1) * w + x, sub = Math.max(0, y - r) * w + x;
+      sum += tmp[add] - tmp[sub];
+    }
+  }
+  return out;
+}
+
+// Integral-image mean for the adaptive mode (fast local average).
+function boxBlurGray(gray, w, h, radius) {
+  const integ = new Float64Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let rowSum = 0;
+    for (let x = 0; x < w; x++) {
+      rowSum += gray[y * w + x];
+      integ[(y + 1) * (w + 1) + (x + 1)] = integ[y * (w + 1) + (x + 1)] + rowSum;
+    }
+  }
+  const out = new Float32Array(w * h);
+  const r = Math.max(1, Math.round(radius));
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r), y1 = Math.min(h - 1, y + r);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r), x1 = Math.min(w - 1, x + r);
+      const A = integ[y0 * (w + 1) + x0];
+      const B = integ[y0 * (w + 1) + (x1 + 1)];
+      const C = integ[(y1 + 1) * (w + 1) + x0];
+      const D = integ[(y1 + 1) * (w + 1) + (x1 + 1)];
+      const area = (x1 - x0 + 1) * (y1 - y0 + 1);
+      out[y * w + x] = (D - B - C + A) / area;
+    }
+  }
+  return out;
+}
+
+// Despeckle — removes isolated pixels (salt and pepper) while keeping thin
+// traces. A median or majority filter eats one-pixel lines: the middle pixel
+// of a hairline has only 2 line-neighbours out of 9, so any "more than half"
+// rule wipes it. Here a pixel survives only if at least a quarter of the
+// OTHER pixels agree with it: a hairline pixel has 2 of 8 (25%) and lives, a
+// lone speckle has 0 and dies.
+// "levels" widens the neighbourhood slowly: 1..4 -> radius 1, 5..8 -> 2,
+// 9..12 -> 3. Wider radii eat hairlines, so the top end stays conservative.
+function denoiseMask(mask, w, h, levels) {
+  const r = Math.max(1, Math.min(3, Math.ceil(levels / 4)));
+  const next = new Uint8Array(w * h);
+  // Green's 8-neighbourhood, scaled by r: a hairline pixel keeps one
+  // neighbour straight along the line at any radius, so "has any black
+  // neighbour in its own row/column/diagonal" preserves hairlines exactly
+  // while a lone speckle (no such neighbour at all) still dies.
+  for (let y = 0; y < h; y++) {
+    const row0 = y * w;
+    const yUp = y - r >= 0 ? (y - r) * w : -1;
+    const yDn = y + r < h ? (y + r) * w : -1;
+    for (let x = 0; x < w; x++) {
+      if (!mask[row0 + x]) continue;          // white stays white, untouched
+      const xL = x - r >= 0 ? x - r : -1;
+      const xR = x + r < w ? x + r : -1;
+      let keep = 0;
+      if (xL >= 0 && mask[row0 + xL]) keep = 1;
+      else if (xR >= 0 && mask[row0 + xR]) keep = 1;
+      else if (yUp >= 0 && mask[yUp + x]) keep = 1;
+      else if (yDn >= 0 && mask[yDn + x]) keep = 1;
+      else if (xL >= 0 && yUp >= 0 && mask[yUp + xL]) keep = 1;
+      else if (xR >= 0 && yUp >= 0 && mask[yUp + xR]) keep = 1;
+      else if (xL >= 0 && yDn >= 0 && mask[yDn + xL]) keep = 1;
+      else if (xR >= 0 && yDn >= 0 && mask[yDn + xR]) keep = 1;
+      next[row0 + x] = keep;
+    }
+  }
+  return next;
+}
+
+// Build the binarized bitmap from the pristine base at its native resolution.
+function buildBinary() {
+  ensureBase();
+  const src = doc.base;
+  const w = src.width, h = src.height;
+  const data = src.getContext("2d").getImageData(0, 0, w, h).data;
+
+  const gray = new Float32Array(w * h);
+  const distF = new Float32Array(w * h);
+  const s = binState.sample;
+
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const r = data[i], g = data[i+1], b = data[i+2];
+    gray[p] = 0.299 * r + 0.587 * g + 0.114 * b;
+    // colour distance is needed by both colour and adaptive modes
+    if (s) {
+      distF[p] = colorDistance(r, g, b, s.r, s.g, s.b);
+    }
+  }
+
+  // local reference for adaptive mode
+  let localMean = null;
+  if (binState.mode === "adaptive") {
+    // adapt on whatever signal we are separating: colour distance when a
+    // sample exists, plain brightness otherwise
+    localMean = boxBlurGray(s ? distF : gray, w, h, binState.adapt);
+  }
+
+  const mask = new Uint8Array(w * h);
+  const T = binState.thresh;
+
+  for (let p = 0; p < w * h; p++) {
+    let on;
+    if (binState.mode === "luma") {
+      // dark pixels are copper on a light mask (the usual photo)
+      on = gray[p] < T ? 1 : 0;
+    } else if (binState.mode === "color") {
+      if (!s) { on = gray[p] < T ? 1 : 0; }
+      else on = distF[p] <= T ? 1 : 0;
+    } else {
+      // adaptive: a pixel counts as trace when it is clearly more "sample-like"
+      // than its neighbourhood. The slider biases the decision.
+      const ref = localMean[p];
+      const bias = (T - 128) * 0.6;
+      if (s) on = distF[p] <= Math.max(1, ref + bias) ? 1 : 0;
+      else on = gray[p] < ref + bias ? 1 : 0;
+    }
+    if (binState.invert) on = on ? 0 : 1;
+    mask[p] = on;
+  }
+
+  // Order matters: denoise the HARD mask first (kills speckle at the raw
+  // threshold), then let the soft pass build the ramps. Doing it the other
+  // way round smoothed values first, and the median then had nothing left
+  // to remove — that is why the slider looked dead on a hard-threshold image.
+  let finalMask = mask;
+  const dn = binState.denoise | 0;
+  if (dn > 0) {
+    finalMask = denoiseMask(mask, w, h, dn);
+  }
+
+  // soft edge: blur the mask a little, then re-threshold the intermediate
+  // values so the boundary becomes a smooth ramp instead of a jagged step
+  const out = document.createElement("canvas");
+  out.width = w; out.height = h;
+  const oc = out.getContext("2d");
+  const img = oc.createImageData(w, h);
+  const soft = binState.soft;
+
+  if (soft > 0) {
+    // box-average the mask, then stretch contrast so the edge stays tight.
+    const r = Math.max(1, Math.min(Math.round(soft), Math.max(1, Math.floor(Math.min(w, h) / 2) - 1)));
+    const buf = boxBlurFast(finalMask, w, h, r);
+    for (let p = 0; p < w * h; p++) {
+      // stretch the 0..1 average around 0.5 to keep edges crisp
+      const v = clamp((buf[p] - 0.5) * 2.2 + 0.5, 0, 1);
+      const g8 = Math.round((1 - v) * 255);
+      img.data[p*4] = g8; img.data[p*4+1] = g8; img.data[p*4+2] = g8; img.data[p*4+3] = 255;
+    }
+  } else {
+    for (let p = 0; p < w * h; p++) {
+      const g8 = finalMask[p] ? 0 : 255;
+      img.data[p*4] = g8; img.data[p*4+1] = g8; img.data[p*4+2] = g8; img.data[p*4+3] = 255;
+    }
+  }
+
+  oc.putImageData(img, 0, 0);
+  binState.result = out;
+
+  // coverage readout: how much of the board became "trace"
+  let on = 0;
+  for (let p = 0; p < w * h; p++) if (finalMask[p]) on++;
+  const pct = (on / (w * h)) * 100;
+  const cov = document.getElementById("binCoverage");
+  if (cov) cov.textContent = pct.toFixed(1) + "%";
+
+  return out;
+}
+
+function binInvalidate() { binState.dirty = true; scheduleBinPreview(); }
+
+let binJob = 0;
+function scheduleBinPreview() {
+  if (!doc || tool !== "binary") return;
+  const job = ++binJob;
+  // debounce: sliders fire rapidly, one build per frame is enough
+  setTimeout(() => {
+    if (job !== binJob || tool !== "binary" || !doc) return;
+    buildBinary();
+    drawBinaryPreview();
+  }, 16);
+}
+
+// Live preview drawn on the overlay, so the working bitmap is untouched
+// until the user presses "Застосувати".
+function drawBinaryPreview() {
+  if (!doc || tool !== "binary" || !binState.preview || !binState.result) {
+    drawOverlay(); drawToolLayer(); return;
+  }
+  const w = stage.clientWidth, h = stage.clientHeight;
+  ctxOvl.clearRect(0, 0, w, h);
+  ctxOvl.save();
+  ctxOvl.imageSmoothingEnabled = true;
+  ctxOvl.imageSmoothingQuality = "high";
+  ctxOvl.globalAlpha = 0.92;
+  ctxOvl.drawImage(binState.result, view.x, view.y,
+    binState.result.width * view.scale, binState.result.height * view.scale);
+  ctxOvl.restore();
+}
+
+/* ============================================================
    GLOBAL UI WIRING
    ============================================================ */
+/* ---------- BINARIZE UI wiring ---------- */
+function binSetMode(mode) {
+  binState.mode = mode;
+  document.querySelectorAll("#binModeRow .btn").forEach(b =>
+    b.classList.toggle("active-mode", b.dataset.binmode === mode));
+  const hint = document.getElementById("binModeHint");
+  if (hint) hint.textContent = mode === "luma"
+    ? "Простий поріг яскравості. Гарно для чистого ч/б скану."
+    : mode === "color"
+      ? "За кольором зразка. Найкраще для кольорового фото плати."
+      : "Локальна адаптація. Вирівнює нерівне освітлення по площі.";
+  document.getElementById("binAdaptField").style.display = mode === "adaptive" ? "block" : "none";
+  binInvalidate();
+}
+document.querySelectorAll("#binModeRow .btn").forEach(b => {
+  b.onclick = () => binSetMode(b.dataset.binmode);
+});
+
+const binPickBtn = document.getElementById("binPickBtn");
+binPickBtn.onclick = () => {
+  if (!doc) { toast("Спершу відкрийте файл", 2500); return; }
+  binState.picking = true;
+  document.body.classList.add("picking-trace");
+  setCursor("crosshair");
+  toast("Тицніть у доріжку на платі", 3000);
+};
+
+function binClearSample() {
+  binState.sample = null;
+  binState.picking = false;
+  document.body.classList.remove("picking-trace");
+  const thumb = document.getElementById("binThumb");
+  thumb.style.background = "";
+  document.getElementById("binMeta").textContent = "не вибрано";
+  document.getElementById("binPickReset").disabled = true;
+  binInvalidate();
+  render();
+}
+document.getElementById("binPickReset").onclick = binClearSample;
+
+// Called from the stage click handler while the eyedropper is armed.
+function binHandlePick(ip) {
+  const s = pickPixelAt(ip.x, ip.y);
+  if (!s) return false;
+  binState.sample = s;
+  binState.picking = false;
+  document.body.classList.remove("picking-trace");
+
+  const thumb = document.getElementById("binThumb");
+  thumb.style.background = `rgb(${s.r},${s.g},${s.b})`;
+  const hsv = rgb2hsv(s.r, s.g, s.b);
+  document.getElementById("binMeta").textContent =
+    `RGB ${s.r},${s.g},${s.b} · H ${Math.round(hsv.h)}° S ${Math.round(hsv.s*100)}%`;
+  document.getElementById("binPickReset").disabled = false;
+
+  // auto-suggest a threshold from the neighbourhood so the first result is close
+  const T = suggestThreshold(ip.x, ip.y, s);
+  binState.thresh = T;
+  document.getElementById("binThresh").value = T;
+  document.getElementById("binThreshVal").textContent = T;
+
+  // picking a colour only makes sense in colour/adaptive mode
+  if (binState.mode === "luma") binSetMode("color");
+  binInvalidate();
+  toast(`Зразок узято. Поріг ≈ ${T}`, 2600);
+  return true;
+}
+
+const binThreshEl = document.getElementById("binThresh");
+binThreshEl.oninput = () => {
+  binState.thresh = +binThreshEl.value;
+  document.getElementById("binThreshVal").textContent = binThreshEl.value;
+  binInvalidate();
+};
+const binSoftEl = document.getElementById("binSoft");
+binSoftEl.oninput = () => {
+  binState.soft = +binSoftEl.value;
+  document.getElementById("binSoftVal").textContent = binSoftEl.value;
+  binInvalidate();
+};
+const binAdaptEl = document.getElementById("binAdapt");
+binAdaptEl.oninput = () => {
+  binState.adapt = +binAdaptEl.value;
+  document.getElementById("binAdaptVal").textContent = binAdaptEl.value;
+  binInvalidate();
+};
+const binDenoiseEl = document.getElementById("binDenoise");
+binDenoiseEl.oninput = () => {
+  binState.denoise = +binDenoiseEl.value;
+  document.getElementById("binDenoiseVal").textContent = binDenoiseEl.value;
+  binInvalidate();
+};
+document.getElementById("binInvert").onchange = (e) => {
+  binState.invert = e.target.checked;
+  binInvalidate();
+};
+document.getElementById("binPreviewToggle").onclick = (e) => {
+  binState.preview = !binState.preview;
+  e.target.textContent = binState.preview ? "Оригінал" : "Показати результат";
+  render();
+};
+
+document.getElementById("binApply").onclick = () => {
+  if (!doc) return;
+  if (!binState.result) buildBinary();
+  if (!binState.result) { toast("Немає результату", 2500); return; }
+  pushHistory();
+  const out = document.createElement("canvas");
+  out.width = binState.result.width;
+  out.height = binState.result.height;
+  out.getContext("2d").drawImage(binState.result, 0, 0);
+  doc.canvas = out;
+  // the binarized bitmap is now the source of truth
+  doc.base = null;
+  doc.basePxPerMm = null;
+  ensureBase();
+  fitToView();
+  render();
+  syncScaleFields();
+  toast("Бінаризацію застосовано");
+};
+
 document.getElementById("openBtn").onclick = () => document.getElementById("fileInput").click();
 document.getElementById("fileInput").onchange = (e) => loadFile(e.target.files[0]);
 
@@ -2441,9 +3018,15 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "p" || e.key === "P") switchTool("perspective");
   if (e.key === "s" || e.key === "S") switchTool("scale");
   if (e.key === "d" || e.key === "D") switchTool("detect");
+  if (e.key === "b" || e.key === "B") switchTool("binary");
   if (e.key === "e" || e.key === "E") switchTool("export");
   if (e.key === "Escape") {
     twoPoints = [];
+    if (binState.picking) {
+      binState.picking = false;
+      document.body.classList.remove("picking-trace");
+      setCursor("default");
+    }
     if (pendingComponent) {
       pendingComponent = null;
       holePreview = null;
