@@ -595,6 +595,14 @@
           </div>
         </div>
 
+        <div id="compPairParams" style="display:none">
+          <div class="field">
+            <label data-i18n="det.knownDist">Відома відстань, мм</label>
+            <input type="number" id="compPairMm" step="0.01" min="0.01" placeholder="10">
+          </div>
+        </div>
+
+        <p class="hint" id="compNeedsHint" style="margin:0 0 8px"></p>
         <button class="btn primary" id="compAddBtn" data-i18n="det.add">+ Додати компонент</button>
         <p class="hint" id="compSnapHint" style="margin:10px 0 0" data-i18n="det.snapHint">Тисніть приблизно в отвір — центр знайдеться сам за схожим кольором, товщина кліку не важлива.</p>
         <p class="status" id="compStatus"></p>
@@ -2472,27 +2480,85 @@ const compLineParams = document.getElementById("compLineParams");
 const compAddBtn = document.getElementById("compAddBtn");
 const compStatus = document.getElementById("compStatus");
 
+// Which component kinds make sense for which pick type. A pad has a centre
+// you can click but no bore, a through-hole has both, and a bare point gives
+// you no fixed feature to derive a pitch from — so each type gets its own
+// short list instead of a 15-item menu that mostly does not apply.
+const KIND_OPTIONS = {
+  // SMD footprints: surface pads, no bore through the board
+  pads: [
+    "fp:SOIC-8", "fp:SOIC-14", "fp:SOIC-16",
+    "fp:SOT-23", "fp:SOT-223",
+    "fp:QFP-32", "fp:QFP-44", "fp:QFP-64",
+  ],
+  // through-hole parts, plus the free pitch line for DIP headers and the like
+  holes: [
+    "line",
+    "fp:DIP-8", "fp:DIP-14", "fp:DIP-16", "fp:DIP-20", "fp:DIP-28", "fp:DIP-40",
+  ],
+  point: [
+    "line", "line:row", "line:col", "rect",
+  ],
+};
+
+function pickTypeOf() {
+  return compPickType.value === "hole" ? "holes"
+    : compPickType.value === "point" ? "point" : "pads";
+}
+
+function kindLabel(kind) {
+  switch (kind) {
+    case "line": return t("det.pitchLine");
+    case "line:row": return t("det.distRow");
+    case "line:col": return t("det.distCol");
+    case "rect": return t("det.rect");
+    case "rect:rect": return t("det.diagRect");
+    default: return kind.replace(/^fp:/, "");
+  }
+}
+
 function rebuildKindOptions() {
-  const pick = compPickType.value;
+  const type = pickTypeOf();
+  const prev = compKind.value;
+  const list = KIND_OPTIONS[type].slice();
+
   compKind.innerHTML = "";
-  const opt = (v, label) => {
+  list.forEach(v => {
     const o = document.createElement("option");
-    o.value = v; o.textContent = label;
+    o.value = v;
+    o.textContent = kindLabel(v);
     compKind.appendChild(o);
-    return o;
-  };
-  opt("line", t("det.pitchLine"));
-  for (const name of Object.keys(FOOTPRINTS)) opt("fp:" + name, name);
+  });
+  // keep the previous choice when it still exists in the new list
+  if (list.includes(prev)) compKind.value = prev;
   updateKindParams();
 }
 
 function updateKindParams() {
   const kind = compKind.value;
-  if (kind === "line") {
-    compLineParams.style.display = "block";
-    document.getElementById("compCount").value = Math.max(2, +document.getElementById("compCount").value || 2);
+  const isLine = kind === "line";
+  const isPair = kind === "line:row" || kind === "line:col" || kind === "rect" || kind === "rect:rect";
+
+  // pitch/count belong to the free pitch line; a two-point measurement asks
+  // for one known distance instead
+  compLineParams.style.display = isLine ? "block" : "none";
+  const pairField = document.getElementById("compPairParams");
+  if (pairField) pairField.style.display = isPair ? "block" : "none";
+
+  let needs = null;
+  if (isLine) {
+    const countEl = document.getElementById("compCount");
+    countEl.value = Math.max(2, +countEl.value || 2);
+    needs = +countEl.value;
+  } else if (isPair) {
+    needs = 2;
   } else if (kind.startsWith("fp:")) {
-    compLineParams.style.display = "none";
+    needs = FOOTPRINTS[kind.slice(3)].pins;
+  }
+  const hint = document.getElementById("compNeedsHint");
+  if (hint) {
+    hint.style.display = needs ? "block" : "none";
+    if (needs) hint.textContent = t("det.needsClicks", { n: needs });
   }
 }
 
@@ -2501,6 +2567,7 @@ compPickType.onchange = () => {
   updateCompAddButton();
 };
 compKind.onchange = updateKindParams;
+document.getElementById("compCount").oninput = updateKindParams;
 
 compAddBtn.onclick = () => {
   if (!doc) { toast(t("msg.openFirst")); return; }
@@ -2508,6 +2575,29 @@ compAddBtn.onclick = () => {
   const pick = compPickType.value;
   const kind = compKind.value;
   let comp;
+
+  if (kind === "line:row" || kind === "line:col" || kind === "rect" || kind === "rect:rect") {
+    // two-point measurement: the user gives one real distance, we measure the
+    // same span in pixels
+    const mm = parseFloat(document.getElementById("compPairMm").value);
+    if (!(mm > 0)) { toast(t("msg.enterDistance")); return; }
+    const axis = kind === "line:row" ? "row" : kind === "line:col" ? "col" : "any";
+    const name = kind === "rect:rect"
+      ? t("det.diagRect")
+      : kind === "rect" ? t("det.rect")
+      : axis === "row" ? t("det.distRow") : t("det.distCol");
+    comp = {
+      pickType: pick, kind: "pair", axis, name,
+      clicks: [], count: 2, pairMm: mm,
+    };
+    pendingComponent = comp;
+    compStatus.className = "status";
+    compStatus.textContent = t("msg.clickContacts", {count: 2, type: pickLabel(pick), done: 0});
+    updateCompAddButton();
+    drawOverlay();
+    drawToolLayer();
+    return;
+  }
 
   if (kind === "line") {
     const pitch = parseFloat(document.getElementById("compPitch").value);
@@ -2638,6 +2728,15 @@ function highlightComponent(i) {
 function componentScale(c) {
   const pts = c.clicks;
   if (pts.length < 2) return null;
+
+  if (c.kind === "pair") {
+    // two points, one known distance. Axis-constrained kinds measure along
+    // that axis only, so a slightly uneven click does not inflate the scale.
+    const dx = Math.abs(pts[1].x - pts[0].x), dy = Math.abs(pts[1].y - pts[0].y);
+    const span = c.axis === "row" ? dx : c.axis === "col" ? dy : Math.hypot(dx, dy);
+    if (!(span > 0)) return null;
+    return { pxPerMm: span / c.pairMm, angle: edgeAngle(pts) };
+  }
 
   if (c.kind === "line") {
     // consecutive spacings should equal mmPerStep
@@ -4039,6 +4138,12 @@ const I18N = {
     "det.comp": "Компонент",
     "det.pitchLine": "Лінія з кроком…",
     "det.pitch": "Крок",
+    "det.distRow": "Відстань по горизонталі",
+    "det.distCol": "Відстань по вертикалі",
+    "det.rect": "Дві точки (будь-яка відстань)",
+    "det.diagRect": "Діагональ (два кути)",
+    "det.knownDist": "Відома відстань, мм",
+    "det.needsClicks": "Потрібно кліків: {n}",
     "det.count": "Кількість контактів",
     "det.add": "+ Додати компонент",
     "det.snapHint": "Тисніть приблизно в отвір — центр знайдеться сам за схожим кольором, товщина кліку не важлива.",
@@ -4290,6 +4395,12 @@ const I18N = {
     "det.comp": "Component",
     "det.pitchLine": "Pitch line…",
     "det.pitch": "Pitch",
+    "det.distRow": "Distance across",
+    "det.distCol": "Distance down",
+    "det.rect": "Two points (any distance)",
+    "det.diagRect": "Diagonal (two corners)",
+    "det.knownDist": "Known distance, mm",
+    "det.needsClicks": "Clicks needed: {n}",
     "det.count": "Contact count",
     "det.add": "+ Add component",
     "det.snapHint": "Click roughly on the hole — the centre is found by similar colour, click thickness does not matter.",
