@@ -98,6 +98,10 @@
   .field input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
   .row2 { display: flex; gap: 8px; }
   .row2 > * { flex: 1; min-width: 0; }
+  .row3 { display: flex; gap: 6px; }
+  .row3 > * { flex: 1; min-width: 0; }
+  .round-btn { padding: 8px 4px; font-size: 11px; white-space: nowrap; }
+  .round-btn:active { background: var(--accent-soft); border-color: var(--accent); }
 
   .btn {
     width: 100%; padding: 9px; border-radius: 7px; border: 1px solid var(--border);
@@ -224,6 +228,10 @@
       <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
       <span>Відміна</span>
     </button>
+    <button class="rail-btn" id="redoBtn" title="Повторити скасовану дію (Ctrl+Shift+Z)" disabled>
+      <svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+      <span>Повтор</span>
+    </button>
     <button class="rail-btn" id="resetBtn" title="Скинути до оригіналу">
       <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
       <span>Скинути</span>
@@ -287,6 +295,14 @@
           <div class="big" id="cropSize">— × —</div>
           <div class="sub">розмір рамки</div>
         </div>
+        <div class="field">
+          <label>Округлити розмір рамки</label>
+          <div class="row3">
+            <button class="btn round-btn" data-round="floor" title="Округлити в менший бік (вниз)">↓ менше</button>
+            <button class="btn round-btn" data-round="round" title="Округлити до найближчого цілого">≈ авто</button>
+            <button class="btn round-btn" data-round="ceil" title="Округлити в більший бік (вгору)">↑ більше</button>
+          </div>
+        </div>
         <button class="btn ok" id="cropApply">Застосувати обрізку</button>
         <button class="btn" id="cropReset">Скинути рамку</button>
       </div>
@@ -323,6 +339,15 @@
             <div class="field"><label>Висота, мм</label><input type="number" id="scaleH" step="0.01" placeholder="80"></div>
           </div>
           <label class="chk"><input type="checkbox" id="scaleLock" checked> Зберігати пропорції</label>
+          <div class="field">
+            <label>Округлити до цілих мм</label>
+            <div class="row3">
+              <button class="btn round-btn" id="scaleRoundFloor" data-round="floor" title="Округлити в менший бік (вниз)">↓ менше</button>
+              <button class="btn round-btn" id="scaleRound" data-round="round" title="Округлити до найближчого цілого">≈ авто</button>
+              <button class="btn round-btn" id="scaleRoundCeil" data-round="ceil" title="Округлити в більший бік (вгору)">↑ більше</button>
+            </div>
+            <p class="hint" style="margin:6px 0 0">Заповнює поля ширини/висоти цілим значенням.</p>
+          </div>
           <button class="btn primary" id="scaleWhApply">Застосувати</button>
         </div>
 
@@ -759,7 +784,9 @@ function updateSizeLabel() {
   }
 }
 
-/* ---------- History ---------- */
+/* ---------- History (undo / redo) ---------- */
+const redoStack = [];
+
 function pushHistory() {
   if (!doc) return;
   const snap = document.createElement("canvas");
@@ -768,17 +795,43 @@ function pushHistory() {
   snap.getContext("2d").drawImage(doc.canvas, 0, 0);
   history.push({ canvas: snap, pxPerMm: doc.pxPerMm });
   if (history.length > HISTORY_MAX) history.shift();
-  document.getElementById("undoBtn").disabled = false;
+  // a new edit invalidates the redo branch
+  redoStack.length = 0;
+  updateHistoryButtons();
 }
 function undo() {
   if (!history.length || !doc) return;
+  const current = snapshotDoc();
   const s = history.pop();
+  redoStack.push(current);
+  if (redoStack.length > HISTORY_MAX) redoStack.shift();
   doc.canvas = s.canvas;
   doc.pxPerMm = s.pxPerMm;
   fitToView();
   render();
   toast("Скасовано");
-  document.getElementById("undoBtn").disabled = history.length === 0;
+  updateHistoryButtons();
+}
+function redo() {
+  if (!redoStack.length || !doc) return;
+  const s = redoStack.pop();
+  history.push(snapshotDoc());
+  if (history.length > HISTORY_MAX) history.shift();
+  doc.canvas = cloneCanvas(s.canvas);
+  doc.pxPerMm = s.pxPerMm;
+  fitToView();
+  render();
+  toast("Повторено");
+  updateHistoryButtons();
+}
+function snapshotDoc() {
+  return { canvas: cloneCanvas(doc.canvas), pxPerMm: doc.pxPerMm };
+}
+function updateHistoryButtons() {
+  const u = document.getElementById("undoBtn");
+  const r = document.getElementById("redoBtn");
+  if (u) u.disabled = history.length === 0;
+  if (r) r.disabled = redoStack.length === 0;
 }
 
 /* ---------- Filter params ---------- */
@@ -828,11 +881,12 @@ async function loadFile(file) {
       URL.revokeObjectURL(img.src);
     }
     history.length = 0;
-    document.getElementById("undoBtn").disabled = true;
+    redoStack.length = 0;
+    updateHistoryButtons();
     fitToView();
     updateFilterParams();
     render();
-    switchTool("crop"); // разом з цим підготуємо cropRect через initCrop()
+    // stay on the Import tool: the user decides when to switch to Crop
     toast("Файл завантажено");
   } catch (err) {
     console.error(err);
@@ -1263,6 +1317,56 @@ document.getElementById("perspApply").onclick = () => {
 document.getElementById("perspReset").onclick = () => {
   if (doc) { perspQuad = null; initPerspective(); drawToolLayer(); }
 };
+
+/* ============================================================
+   ROUNDING — floor / auto / ceil to whole mm
+   ============================================================ */
+function roundValue(v, type) {
+  if (!(v > 0)) return v;
+  if (type === "floor") return Math.floor(v);
+  if (type === "ceil") return Math.ceil(v);
+  return Math.round(v);
+}
+
+// Crop frame: snap its mm size to a whole number, keeping the top-left corner.
+document.querySelectorAll('.pane[data-pane="crop"] .round-btn').forEach(btn => {
+  btn.onclick = () => {
+    if (!doc || !cropRect) return;
+    if (!doc.pxPerMm) { toast("Спершу визначте масштаб", 3000); return; }
+    const type = btn.dataset.round;
+    const mmW = cropRect.w / doc.pxPerMm;
+    const mmH = cropRect.h / doc.pxPerMm;
+    const tW = roundValue(mmW, type);
+    const tH = roundValue(mmH, type);
+    if (!(tW >= 1) || !(tH >= 1)) { toast("Результат менший за 1 мм", 2500); return; }
+    // stay inside the image
+    cropRect.w = Math.min(tW * doc.pxPerMm, doc.canvas.width - cropRect.x);
+    cropRect.h = Math.min(tH * doc.pxPerMm, doc.canvas.height - cropRect.y);
+    drawToolLayer();
+    updateSizeLabel();
+    toast(`Рамка: ${Math.round(cropRect.w / doc.pxPerMm)} × ${Math.round(cropRect.h / doc.pxPerMm)} мм`);
+  };
+});
+
+// Scale pane: fill the width/height inputs with rounded whole mm values.
+document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
+  btn.onclick = () => {
+    if (!doc) return;
+    if (!doc.pxPerMm) { toast("Спершу визначте масштаб", 3000); return; }
+    const type = btn.dataset.round;
+    const lock = document.getElementById("scaleLock").checked;
+    const mmW = doc.canvas.width / doc.pxPerMm;
+    const mmH = doc.canvas.height / doc.pxPerMm;
+    const wEl = document.getElementById("scaleW");
+    const hEl = document.getElementById("scaleH");
+    const base = parseFloat(wEl.value);
+    const refW = base > 0 ? base : mmW;
+    const tW = Math.max(1, roundValue(refW, type));
+    wEl.value = tW;
+    hEl.value = lock ? (tW * mmH / mmW).toFixed(2) : Math.max(1, roundValue(mmH, type));
+    toast(`Округлено: ${tW}${lock ? " мм (висота за пропорцією)" : " мм"}`, 2000);
+  };
+});
 
 /* ============================================================
    SCALE
@@ -1815,6 +1919,7 @@ function setUnit(u) {
 }
 
 document.getElementById("undoBtn").onclick = undo;
+document.getElementById("redoBtn").onclick = redo;
 
 document.getElementById("resetBtn").onclick = () => {
   if (!doc) return;
@@ -1847,7 +1952,8 @@ stage.addEventListener("drop", (e) => {
 /* keyboard */
 window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
-  if ((e.ctrlKey || e.metaKey) && e.key === "z") { undo(); e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === "z") { if (e.shiftKey) redo(); else undo(); e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === "y") { redo(); e.preventDefault(); return; }
   if (e.key === "v" || e.key === "V") switchTool("import");
   if (e.key === "c" || e.key === "C") switchTool("crop");
   if (e.key === "p" || e.key === "P") switchTool("perspective");
