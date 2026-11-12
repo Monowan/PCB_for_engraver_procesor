@@ -1211,12 +1211,21 @@ function fmtUnitPx(px, ppm) {
   return s + (unit === "mm" ? t("msg.mm") : "″");
 }
 // Sole source of truth for the size fields: the bitmap itself.
-// Called after every operation that changes doc.canvas.
+// Called after every operation that changes doc.canvas, and again whenever the
+// user opens the Scale tool, so the inputs never show a stale size from an
+// earlier session or from before a crop.
 function syncScaleFields() {
-  if (!doc || !doc.pxPerMm) return;
   const wEl = document.getElementById("scaleW");
   const hEl = document.getElementById("scaleH");
   if (!wEl || !hEl) return;
+  if (!doc) { wEl.value = ""; hEl.value = ""; return; }
+  if (!doc.pxPerMm) {
+    // no calibration yet: the fields stay empty rather than keeping a leftover
+    // number that would look like a real measurement
+    wEl.value = "";
+    hEl.value = "";
+    return;
+  }
   wEl.value = fmtNum(doc.canvas.width / doc.pxPerMm);
   hEl.value = fmtNum(doc.canvas.height / doc.pxPerMm);
 }
@@ -1455,6 +1464,9 @@ function switchTool(name) {
       updateAlignButton();
     }
     if (name === "binary") { binInvalidate(); }
+    // the scale tool always opens showing the current real size, never what
+    // the inputs happened to hold from a previous visit
+    if (name === "scale") { syncScaleFields(); updateScaleTwoButton(); }
   }
   canvasTools.style.pointerEvents = (name === "import") ? "none" : "auto";
   setCursor("default");
@@ -2285,6 +2297,13 @@ document.getElementById("scaleTwoApply").onclick = () => {
   toast(t("msg.scaleSet") + `${pxPerMm.toFixed(2)}${t("msg.ppmLabel")}`);
 };
 document.getElementById("scaleTwoReset").onclick = () => { twoPoints = []; updateScaleTwoButton(); drawToolLayer(); };
+// the second scale mode gets the same treatment: fill on entry, keep edits
+// while the user stays inside the tool
+document.getElementById("scaleDistMm").addEventListener("focus", () => {
+  if (!doc || !doc.pxPerMm) return;
+  const el = document.getElementById("scaleDistMm");
+  if (!el.value) el.value = fmtNum(Math.min(doc.canvas.width, doc.canvas.height) / doc.pxPerMm);
+});
 function updateScaleTwoButton() {
   document.getElementById("scaleTwoApply").disabled = twoPoints.length !== 2;
 }
