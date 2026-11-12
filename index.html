@@ -163,6 +163,17 @@
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+  /* current size indicator, bottom-left corner of the canvas stage */
+  #cornerSize {
+    position: absolute; left: 12px; bottom: 12px; z-index: 20;
+    background: rgba(31,35,40,.82); color: #fff; backdrop-filter: blur(4px);
+    border-radius: 8px; padding: 7px 11px; font-size: 12px; line-height: 1.35;
+    pointer-events: none; display: none; max-width: 70%;
+  }
+  #cornerSize.show { display: block; }
+  #cornerSize .cs-main { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  #cornerSize .cs-sub { font-size: 11px; opacity: .78; font-variant-numeric: tabular-nums; }
+
   @media (max-width: 780px) {
     #sidePanel { width: 240px; flex-basis: 240px; }
     #toolRail { width: 52px; flex-basis: 52px; }
@@ -184,9 +195,9 @@
 <div id="app">
   <!-- ============ LEFT TOOL RAIL ============ -->
   <div id="toolRail">
-    <button class="rail-btn active" data-tool="move" title="Перегляд / переміщення (V)">
-      <svg viewBox="0 0 24 24"><path d="M4 4l7 17 2.5-6.5L20 12z"/></svg>
-      <span>Курсор</span>
+    <button class="rail-btn active" data-tool="import" title="Імпорт файлу та глобальні налаштування (V)">
+      <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>
+      <span>Імпорт</span>
     </button>
     <button class="rail-btn" data-tool="crop" title="Обрізка прямокутною рамкою (C)">
       <svg viewBox="0 0 24 24"><path d="M6 2v16h16M2 6h16v16"/></svg>
@@ -227,6 +238,8 @@
       <p>або натисніть кнопку «Відкрити файл» праворуч</p>
     </div>
 
+    <div id="cornerSize"><div class="cs-main">— × —</div><div class="cs-sub"></div></div>
+
     <div id="toast"></div>
   </div>
 
@@ -236,7 +249,7 @@
     <div id="panelBody">
 
       <!-- ---- FILE / GLOBAL ---- -->
-      <div class="pane active" data-pane="file">
+      <div class="pane active" data-pane="import">
         <button class="btn primary" id="openBtn">Відкрити файл</button>
         <input type="file" id="fileInput" accept="image/*,.pdf" hidden>
 
@@ -441,7 +454,7 @@ const invertChk    = document.getElementById("invertChk");
 let dpr = window.devicePixelRatio || 1;
 let doc = null;                // { canvas, origCanvas, pxPerMm, source }
 let view = { x: 0, y: 0, scale: 1 };   // pan + zoom
-let tool = "move";
+let tool = "import";
 let isInverted = false;
 let unit = "mm";               // "mm" | "inch"
 
@@ -686,20 +699,44 @@ function fmtUnit(px) {
 function updateSizeLabel() {
   const sizeEl = document.getElementById("sizeDisplay");
   const dpiEl  = document.getElementById("dpiDisplay");
-  if (!doc) { sizeEl.textContent = "— × —"; dpiEl.textContent = "Масштаб: не визначено"; return; }
+  const cornerEl = document.getElementById("cornerSize");
+  const cornerMain = cornerEl.querySelector(".cs-main");
+  const cornerSub  = cornerEl.querySelector(".cs-sub");
+
+  if (!doc) {
+    sizeEl.textContent = "— × —"; dpiEl.textContent = "Масштаб: не визначено";
+    cornerEl.classList.remove("show");
+    cornerMain.textContent = "— × —";
+    cornerSub.textContent = "";
+    return;
+  }
 
   const w = doc.canvas.width, h = doc.canvas.height;
   if (doc.pxPerMm) {
     sizeEl.textContent = `${fmtUnit(w)} × ${fmtUnit(h)}`;
     const dpi = doc.pxPerMm * 25.4;
     dpiEl.textContent = `Масштаб: ${dpi.toFixed(0)} DPI · ${doc.pxPerMm.toFixed(1)} px/мм`;
+    cornerMain.textContent = `${fmtUnit(w)} × ${fmtUnit(h)}`;
+    cornerSub.textContent = `${dpi.toFixed(0)} DPI · ${doc.pxPerMm.toFixed(1)} px/мм`;
   } else {
     sizeEl.textContent = `${w} × ${h} px`;
     dpiEl.textContent = "Масштаб: не визначено";
+    cornerMain.textContent = `${w} × ${h} px`;
+    cornerSub.textContent = "Масштаб не визначено";
   }
 
-  // crop pane
-  if (cropRect) {
+  // context sub-line: live crop frame / zoom
+  const zoom = `${Math.round(view.scale * 100)}%`;
+  if (cropRect && tool === "crop") {
+    cornerSub.textContent =
+      (doc.pxPerMm
+        ? `${fmtUnit(cropRect.w)} × ${fmtUnit(cropRect.h)}`
+        : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`) + ` · рамка`;
+  }
+  cornerSub.textContent = cornerSub.textContent + ` · ${zoom}`;
+  cornerEl.classList.add("show");
+
+  if (cropRect && tool === "crop" && document.querySelector('.pane[data-pane="crop"]').classList.contains("active")) {
     const el = document.getElementById("cropSize");
     el.textContent = doc.pxPerMm
       ? `${fmtUnit(cropRect.w)} × ${fmtUnit(cropRect.h)}`
@@ -812,7 +849,7 @@ const toolButtons = [...document.querySelectorAll(".rail-btn[data-tool]")];
 toolButtons.forEach(b => b.onclick = () => switchTool(b.dataset.tool));
 
 function switchTool(name) {
-  if (!["move","crop","perspective","scale","detect"].includes(name)) return;
+  if (!["import","crop","perspective","scale","detect"].includes(name)) return;
   tool = name;
   toolButtons.forEach(b => b.classList.toggle("active", b.dataset.tool === name));
   document.querySelectorAll(".pane").forEach(p =>
@@ -829,7 +866,7 @@ function switchTool(name) {
       updateAlignButton();
     }
   }
-  canvasTools.style.pointerEvents = (name === "move") ? "none" : "auto";
+  canvasTools.style.pointerEvents = (name === "import") ? "none" : "auto";
   setCursor("default");
   render();
 }
@@ -1065,7 +1102,7 @@ stage.addEventListener("wheel", (e) => {
 /* middle-mouse / space-drag panning */
 let panStart = null;
 stage.addEventListener("pointerdown", (e) => {
-  if (e.button === 1 || (tool === "move" && e.button === 0)) {
+  if (e.button === 1 || (tool === "import" && e.button === 0)) {
     panStart = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
   }
 });
@@ -1787,7 +1824,7 @@ stage.addEventListener("drop", (e) => {
 window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
   if ((e.ctrlKey || e.metaKey) && e.key === "z") { undo(); e.preventDefault(); return; }
-  if (e.key === "v" || e.key === "V") switchTool("move");
+  if (e.key === "v" || e.key === "V") switchTool("import");
   if (e.key === "c" || e.key === "C") switchTool("crop");
   if (e.key === "p" || e.key === "P") switchTool("perspective");
   if (e.key === "s" || e.key === "S") switchTool("scale");
