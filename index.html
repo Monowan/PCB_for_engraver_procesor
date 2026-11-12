@@ -135,7 +135,16 @@
     border: 1px solid var(--border); background: repeating-conic-gradient(
       #ddd 0% 25%, #fff 0% 50%) 50%/8px 8px;
   }
-  #binModeRow .btn.active-mode {
+  .bin-x {
+    margin-left: auto; width: 22px; height: 22px; flex: none; padding: 0;
+    border: 1px solid var(--border); border-radius: 5px; background: #fff;
+    color: var(--muted); font-size: 11px; cursor: pointer; line-height: 1;
+  }
+  .bin-x:hover { color: var(--danger); border-color: var(--danger); }
+  #binModeRow .btn.active-mode,
+  #paintModeRow .btn.active-mode,
+  #paintShapeRow .btn.active-mode,
+  #paintColorRow .btn.active-mode {
     background: var(--accent); color: #fff; border-color: var(--accent);
   }
   body.picking-trace #stage { cursor: crosshair !important; }
@@ -244,6 +253,10 @@
     <button class="rail-btn" data-tool="binary" title="Бінаризація — виділити доріжки (B)">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
       <span>Бінаризація</span>
+    </button>
+    <button class="rail-btn" data-tool="paint" title="Малювання — пензель, лінія, заливка, гумка (M)">
+      <svg viewBox="0 0 24 24"><path d="M4 20l1-5 10-10 4 4-10 10z"/><path d="M13 7l4 4"/><path d="M18 4l2 2"/></svg>
+      <span>Малювання</span>
     </button>
     <button class="rail-btn" data-tool="export" title="Експорт PNG / PDF (E)">
       <svg viewBox="0 0 24 24"><path d="M12 19V7"/><path d="M7 12l5-5 5 5"/><path d="M4 4h16"/></svg>
@@ -454,15 +467,21 @@
         <p class="hint">Відділіть доріжки від плати. Візьміть піпеткою колір доріжки — інструмент підбере поріг сам. Далі підстроюєте повзунками.</p>
 
         <div class="field">
-          <label>Зразок доріжки</label>
+          <label>Зразки доріжок <span style="text-transform:none;font-weight:400">(можна два)</span></label>
           <div class="row2">
             <button class="btn" id="binPickBtn" style="flex:1">Взяти піпеткою</button>
-            <button class="btn" id="binPickReset" title="Скинути зразок" disabled>✕</button>
+            <button class="btn" id="binPickReset" title="Скинути обидва зразки" disabled>✕</button>
           </div>
           <div id="binSample" class="bin-sample">
             <span class="bin-thumb" id="binThumb"></span>
             <span class="bin-meta" id="binMeta">не вибрано</span>
           </div>
+          <div id="binSample2Row" class="bin-sample" style="display:none">
+            <span class="bin-thumb" id="binThumb2"></span>
+            <span class="bin-meta" id="binMeta2">—</span>
+            <button class="bin-x" id="binPickReset2" title="Прибрати другий зразок">✕</button>
+          </div>
+          <p class="hint" style="margin:6px 0 0">Два зразки — коли на платі доріжки різного кольору: беруться обидва, поріг спільний.</p>
         </div>
 
         <div class="field">
@@ -502,10 +521,10 @@
         <div class="field">
           <label>Дрібний шум</label>
           <div class="slider-row">
-            <input type="range" id="binDenoise" min="0" max="12" step="1" value="0">
+            <input type="range" id="binDenoise" min="0" max="32" step="1" value="0">
             <output id="binDenoiseVal">0</output>
           </div>
-          <p class="hint" style="margin:6px 0 0">Прибирає окремі точки й піщинки. Тонкі доріжки не зникають.</p>
+          <p class="hint" style="margin:6px 0 0">Прибирає окремі точки й піщинки. Тонкі доріжки не зникають. Великі значення — для брудного фону.</p>
         </div>
 
         <label class="chk"><input type="checkbox" id="binInvert"> Інвертувати (негатив)</label>
@@ -517,6 +536,64 @@
 
         <button class="btn primary" id="binApply" style="margin-top:10px">Застосувати</button>
         <button class="btn" id="binPreviewToggle" style="margin-top:6px">Оригінал</button>
+      </div>
+
+      <div class="pane" data-pane="paint">
+        <p class="hint">Зафарбуйте або виправте вручну: пензель, лінія, заливка, гумка. Діє на чорне/біле — як на граверах.</p>
+
+        <div class="field">
+          <label>Інструмент</label>
+          <div class="row3" id="paintModeRow">
+            <button class="btn round-btn" data-paint="brush" title="Пензель (B)">Пензель</button>
+            <button class="btn round-btn" data-paint="line" title="Пряма лінія (L)">Лінія</button>
+            <button class="btn round-btn" data-paint="fill" title="Заливка області (F)">Заливка</button>
+            <button class="btn round-btn" data-paint="erase" title="Гумка (E)">Гумка</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Розмір, px</label>
+          <div class="slider-row">
+            <input type="range" id="paintSize" min="1" max="200" step="1" value="8">
+            <output id="paintSizeVal">8</output>
+          </div>
+          <div class="row3" style="margin-top:6px">
+            <button class="btn round-btn" data-paintpreset="1">1</button>
+            <button class="btn round-btn" data-paintpreset="4">4</button>
+            <button class="btn round-btn" data-paintpreset="12">12</button>
+            <button class="btn round-btn" data-paintpreset="40">40</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Форма пензля</label>
+          <div class="row2" id="paintShapeRow">
+            <button class="btn round-btn" data-paintshape="round" title="Круглий">Круглий</button>
+            <button class="btn round-btn" data-paintshape="square" title="Квадратний">Квадр.</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Колір</label>
+          <div class="row2" id="paintColorRow">
+            <button class="btn round-btn" data-paintcolor="black" title="Чорний — додати">Чорний</button>
+            <button class="btn round-btn" data-paintcolor="white" title="Білий — прибрати">Білий</button>
+          </div>
+          <label class="chk" style="margin-top:8px"><input type="checkbox" id="paintThresh"> Малювати лише по «поганому» (за порогом)</label>
+        </div>
+
+        <label class="chk"><input type="checkbox" id="paintSnap"> Вирівнювати лінію по осях (Shift)</label>
+
+        <div class="field" style="margin-top:14px">
+          <label>Пороговий шар <span style="text-transform:none;font-weight:400">(для заливки)</span></label>
+          <div class="slider-row">
+            <input type="range" id="paintLevel" min="0" max="255" step="1" value="128">
+            <output id="paintLevelVal">128</output>
+          </div>
+        </div>
+
+        <button class="btn" id="paintUndo" style="margin-top:10px">Скасувати останній мазок</button>
+        <p class="hint" style="margin-top:8px">Alt + клік — піпетка: бере колір під курсором як чорний/білий.</p>
       </div>
 
       <div class="pane" data-pane="export">
@@ -792,6 +869,8 @@ function drawToolLayer() {
   ctxTls.clearRect(0, 0, w, h);
   if (!doc) return;
 
+  if (tool === "paint" && paint.draft) paintDrawDraft();
+
   if (tool === "crop" && cropRect) {
     const a = imgToScreen(cropRect.x, cropRect.y);
     const b = imgToScreen(cropRect.x + cropRect.w, cropRect.y + cropRect.h);
@@ -812,6 +891,10 @@ function drawToolLayer() {
       [a.x, b.y], [(a.x + b.x) / 2, b.y], [b.x, b.y],
     ];
     pts.forEach(([x, y]) => handleDot(x, y));
+  }
+
+  if (tool === "paint") {
+    paintDrawDraft();
   }
 
   if (tool === "perspective" && perspQuad) {
@@ -1118,7 +1201,9 @@ const toolButtons = [...document.querySelectorAll(".rail-btn[data-tool]")];
 toolButtons.forEach(b => b.onclick = () => switchTool(b.dataset.tool));
 
 function switchTool(name) {
-  if (!["import","crop","perspective","scale","detect","binary","export"].includes(name)) return;
+  if (!["import","crop","perspective","scale","detect","binary","paint","export"].includes(name)) return;
+  // leaving the painter mid-stroke must not leave a dangling draft
+  if (tool === "paint" && name !== "paint") paint.draft = null;
   tool = name;
   toolButtons.forEach(b => b.classList.toggle("active", b.dataset.tool === name));
   document.querySelectorAll(".pane").forEach(p =>
@@ -1146,6 +1231,7 @@ function switchTool(name) {
   setCursor("default");
   render();
   if (name === "binary") binSetMode(binState.mode);
+  if (name === "paint") paintSetMode(paint.mode);
 }
 
 function setCursor(c) { canvasTools.style.cursor = c; }
@@ -1244,6 +1330,36 @@ function onDown(e) {
     return;
   }
 
+  if (tool === "paint") {
+    // Alt = eyedropper: adopt the colour under the cursor as black or white
+    if (e.altKey) {
+      const s = pickPixelAt(ip.x, ip.y);
+      if (s) {
+        const l = 0.299 * s.r + 0.587 * s.g + 0.114 * s.b;
+        paintSetColor(l < 128 ? 0 : 255);
+        toast(l < 128 ? "Колір зразка: чорний" : "Колір зразка: білий", 1600);
+      }
+      return;
+    }
+    if (e.button !== 0) return;
+    if (paint.mode === "fill") {
+      paintBegin();
+      const ok = paintFloodFill(Math.round(ip.x), Math.round(ip.y), paint.level);
+      if (ok) render(); else paintBefore = null;
+      return;
+    }
+    paintBegin();
+    if (paint.mode === "line") {
+      paint.draft = { kind: "line", from: ip, to: ip };
+    } else {
+      paint.draft = { kind: "stroke", pts: [ip] };
+    }
+    drag = { part: "paint" };
+    canvasTools.setPointerCapture(e.pointerId);
+    drawToolLayer();
+    return;
+  }
+
   if (tool === "perspective" && perspQuad) {
     let best = -1, bestD = 18; // 18px screen radius
     perspQuad.forEach((q, i) => {
@@ -1283,6 +1399,37 @@ function onDown(e) {
     if (binState.picking) binHandlePick(ip);
     return;
   }
+
+  if (tool === "paint") {
+    // Alt = eyedropper: adopt the colour under the cursor as black or white
+    if (e.altKey) {
+      const s = pickPixelAt(ip.x, ip.y);
+      if (s) {
+        const l = 0.299 * s.r + 0.587 * s.g + 0.114 * s.b;
+        paintSetColor(l < 128 ? 0 : 255);
+        toast(l < 128 ? "Колір зразка: чорний" : "Колір зразка: білий", 1600);
+      }
+      return;
+    }
+    if (e.button !== 0) return;
+    const left = e.button === 0;
+    // right-click or the white colour erases; keep it explicit and predictable
+    if (left && paint.mode === "fill") {
+      paintBegin();
+      const ok = paintFloodFill(Math.round(ip.x), Math.round(ip.y), paint.level);
+      if (ok) render(); else paintBefore = null;
+      return;
+    }
+    paintBegin();
+    if (paint.mode === "line") {
+      paint.draft = { kind: "line", from: ip, to: ip };
+    } else {
+      paint.draft = { kind: "stroke", pts: [ip] };
+    }
+    canvasTools.setPointerCapture(e.pointerId);
+    drawToolLayer();
+    return;
+  }
 }
 
 function onMove(e) {
@@ -1310,7 +1457,31 @@ function onMove(e) {
       if (pendingComponent && pendingComponent.pickType !== "point") updateHolePreview(ip);
     } else if (tool === "binary") {
       setCursor(binState.picking ? "crosshair" : "default");
+    } else if (tool === "paint") {
+      if (e.altKey) setCursor("copy");
+      else if (paint.mode === "fill") setCursor("copy");
+      else if (paint.mode === "erase") setCursor("cell");
+      else setCursor("crosshair");
     }
+    return;
+  }
+
+  if (drag.part === "paint" && paint.draft) {
+    const d = paint.draft;
+    if (d.kind === "line") {
+      let to = ip;
+      if (e.shiftKey || paint.snap) {
+        // axis-lock: pick the dominant direction
+        const dx = Math.abs(to.x - d.from.x), dy = Math.abs(to.y - d.from.y);
+        to = dx > dy ? { x: to.x, y: d.from.y } : { x: d.from.x, y: to.y };
+      }
+      d.to = to;
+    } else {
+      const pts = d.pts;
+      const last = pts[pts.length - 1];
+      if (!last || Math.hypot(ip.x - last.x, ip.y - last.y) > 0.75) pts.push(ip);
+    }
+    drawToolLayer();
     return;
   }
 
@@ -1343,6 +1514,17 @@ let dragCenterOff = { x: 0, y: 0 };
 
 function onUp() {
   if (drag && drag.part === "center") dragCenterOff = { x: 0, y: 0 };
+  if (drag && drag.part === "paint") {
+    const d = paint.draft;
+    drag = null;
+    if (d) {
+      if (d.kind === "line") paintCommitDraft([d.from, d.to]);
+      else paintCommitDraft(d.pts);
+    }
+    paint.draft = null;
+    drawToolLayer();
+    return;
+  }
   drag = null;
 }
 
@@ -2498,7 +2680,8 @@ document.getElementById("exportPdfBtn").onclick = async () => {
    ============================================================ */
 const binState = {
   mode: "color",
-  sample: null,        // {r,g,b} picked colour
+  sample: null,        // {r,g,b} first picked colour
+  sample2: null,       // {r,g,b} optional second colour
   thresh: 128,
   soft: 0,
   adapt: 25,
@@ -2668,13 +2851,22 @@ function boxBlurGray(gray, w, h, radius) {
 // Despeckle — removes isolated pixels (salt and pepper) while keeping thin
 // traces. A median or majority filter eats one-pixel lines: the middle pixel
 // of a hairline has only 2 line-neighbours out of 9, so any "more than half"
-// rule wipes it. Here a pixel survives only if at least a quarter of the
-// OTHER pixels agree with it: a hairline pixel has 2 of 8 (25%) and lives, a
-// lone speckle has 0 and dies.
-// "levels" widens the neighbourhood slowly: 1..4 -> radius 1, 5..8 -> 2,
-// 9..12 -> 3. Wider radii eat hairlines, so the top end stays conservative.
+// rule wipes it. A pixel survives when it still has a black neighbour along
+// its own row / column / diagonal, which leaves hairlines intact while a
+// lone speckle (no such neighbour) dies.
+// "levels" widens the neighbourhood: 1..8 -> radius 1, 9..20 -> 2, 21..32 -> 3.
+// Above 16 a second pass runs, so stubborn clusters of noise go too.
 function denoiseMask(mask, w, h, levels) {
-  const r = Math.max(1, Math.min(3, Math.ceil(levels / 4)));
+  const r = Math.max(1, Math.min(3, Math.ceil(levels / 8)));
+  const passes = levels > 16 ? 2 : 1;
+  let cur = mask;
+  for (let pass = 0; pass < passes; pass++) {
+    cur = despecklePass(cur, w, h, r);
+  }
+  return cur;
+}
+
+function despecklePass(mask, w, h, r) {
   const next = new Uint8Array(w * h);
   // Green's 8-neighbourhood, scaled by r: a hairline pixel keeps one
   // neighbour straight along the line at any radius, so "has any black
@@ -2712,7 +2904,9 @@ function buildBinary() {
 
   const gray = new Float32Array(w * h);
   const distF = new Float32Array(w * h);
+  const dist2F = new Float32Array(w * h);
   const s = binState.sample;
+  const s2 = binState.sample2;
 
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
     const r = data[i], g = data[i+1], b = data[i+2];
@@ -2721,6 +2915,14 @@ function buildBinary() {
     if (s) {
       distF[p] = colorDistance(r, g, b, s.r, s.g, s.b);
     }
+    // the second sample runs on its own distance field, then both are
+    // combined with min() so one shared threshold covers either colour
+    if (s2) {
+      dist2F[p] = colorDistance(r, g, b, s2.r, s2.g, s2.b);
+    }
+  }
+  if (s && s2) {
+    for (let p = 0; p < w * h; p++) if (dist2F[p] < distF[p]) distF[p] = dist2F[p];
   }
 
   // local reference for adaptive mode
@@ -2761,6 +2963,8 @@ function buildBinary() {
   let finalMask = mask;
   const dn = binState.denoise | 0;
   if (dn > 0) {
+    // scale the neighbourhood with the slider: up to 32 levels -> radius 4,
+    // two passes at the top end so a dirty background can really be cleaned
     finalMask = denoiseMask(mask, w, h, dn);
   }
 
@@ -2834,6 +3038,296 @@ function drawBinaryPreview() {
 }
 
 /* ============================================================
+   PAINT — manual bitmap repair (brush / line / fill / eraser)
+   ============================================================ */
+const paint = {
+  mode: "brush",    // brush | line | fill | erase
+  size: 8,
+  shape: "round",   // round | square
+  value: 0,         // 0 = black (add copper), 255 = white (remove)
+  level: 128,       // fill tolerance / "only paint bad" cut-off
+  onlyBad: false,   // paint only where luminance is on the wrong side
+  snap: false,      // keep lines on the axis
+  draft: null,      // { kind:'stroke'|'line', pts|from,to } drawn on the overlay
+};
+
+function paintColorValue() {
+  return paint.mode === "erase" ? 255 : paint.value;
+}
+
+function paintRadius() {
+  // size is the diameter in IMAGE pixels, so the brush keeps its physical
+  // size whatever the zoom is
+  return Math.max(0.5, paint.size / 2);
+}
+
+// Draw a round/square dab in image coordinates straight onto the bitmap.
+function paintDab(ctx, x, y, r, value, shape) {
+  ctx.fillStyle = value ? "#fff" : "#000";
+  if (shape === "square") {
+    ctx.fillRect(Math.round(x - r), Math.round(y - r), Math.max(1, Math.round(r * 2)), Math.max(1, Math.round(r * 2)));
+    return;
+  }
+  ctx.beginPath();
+  ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Segment: no gaps between dabs, and the step never exceeds half a pixel of
+// the current view so a fast drag does not turn into a dotted line.
+function paintStrokeSegment(ctx, a, b) {
+  const r = paintRadius();
+  const dist = Math.hypot(b.x - a.x, b.y - a.y);
+  const step = Math.max(0.5, Math.min(r, 1));
+  const n = Math.max(1, Math.ceil(dist / step));
+  const value = paintColorValue();
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    paintDab(ctx, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, r, value, paint.shape);
+  }
+}
+
+// "Paint only over bad pixels" — the stencil of pixels the stroke may touch.
+//
+// Two sources matter and the old version used only one:
+//   the BITMAP says what is currently marked as copper
+//   the PHOTO    says what the board actually looks like
+//
+//   painting black: allowed only where the bitmap is light but the photo is
+//                   dark  -> a trace the threshold missed
+//   painting white: allowed only where the bitmap is dark but the photo is
+//                   light -> speckle or a false edge that must go
+//
+// Using the bitmap alone made "white" permit every dark pixel, so a stroke
+// over a good trace erased it anyway.
+function paintMaskForBad(ctx, w, h) {
+  const cur = ctx.getImageData(0, 0, w, h);
+  const d = cur.data;
+  const T = paint.level;
+  const paintDark = paintColorValue() === 0;
+
+  // the photo, at the same size, sampled from the pristine base
+  ensureBase();
+  let ref = null;
+  try {
+    ref = doc.base.getContext("2d").getImageData(0, 0, doc.base.width, doc.base.height).data;
+  } catch (e) { ref = null; }
+  const bw = doc.base.width, bh = doc.base.height;
+
+  for (let y = 0; y < h; y++) {
+    const sy = ref ? Math.min(bh - 1, Math.floor(y * bh / h)) : 0;
+    for (let x = 0; x < w; x++) {
+      const i = ((y * w) + x) * 4;
+      const lCur = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      const isDarkCur = lCur < 128;
+
+      let allowed;
+      if (ref) {
+        const sx = Math.min(bw - 1, Math.floor(x * bw / w));
+        const j = ((sy * bw) + sx) * 4;
+        const lRef = 0.299 * ref[j] + 0.587 * ref[j + 1] + 0.114 * ref[j + 2];
+        const isDarkRef = lRef < T;
+        allowed = paintDark ? (!isDarkCur && isDarkRef) : (isDarkCur && !isDarkRef);
+      } else {
+        // no photo to compare with: fall back to the bitmap alone
+        allowed = paintDark ? !isDarkCur : isDarkCur;
+      }
+
+      d[i] = 255; d[i+1] = 255; d[i+2] = 255;
+      // ALPHA is what `source-in` actually reads, and putImageData writes
+      // alpha verbatim — leaving it at 255 made the stencil fully opaque, so
+      // the stroke was never cut.
+      d[i+3] = allowed ? 255 : 0;
+    }
+  }
+  return cur;
+}
+
+// Flood fill over pixels close in brightness (scanline, 4-neighbour).
+function paintFloodFill(cx, cy, tolerance) {
+  const w = doc.canvas.width, h = doc.canvas.height;
+  if (cx < 0 || cy < 0 || cx >= w || cy >= h) return false;
+  const ctx = doc.canvas.getContext("2d", { willReadFrequently: true });
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const start = ((cy * w) + cx) * 4;
+  const sr = d[start], sg = d[start+1], sb = d[start+2];
+  const target = paint.value;
+  // already this colour: nothing to do (avoids an infinite scan)
+  if (Math.abs(sr - target) < 2 && Math.abs(sg - target) < 2 && Math.abs(sb - target) < 2) return false;
+
+  const seen = new Uint8Array(w * h);
+  const tol = Math.max(1, tolerance);
+  const stack = [[cx, cy]];
+  let painted = 0;
+
+  const matches = (i) => {
+    const p = i * 4;
+    return Math.abs(d[p] - sr) <= tol && Math.abs(d[p+1] - sg) <= tol && Math.abs(d[p+2] - sb) <= tol;
+  };
+
+  while (stack.length) {
+    let [x, y] = stack.pop();
+    let row = y * w;
+    if (seen[row + x] || !matches(row + x)) continue;
+    // walk left
+    let xl = x;
+    while (xl > 0 && !seen[row + xl - 1] && matches(row + xl - 1)) xl--;
+    // walk right
+    let xr = x;
+    while (xr < w - 1 && !seen[row + xr + 1] && matches(row + xr + 1)) xr++;
+    for (let xi = xl; xi <= xr; xi++) {
+      const i = row + xi;
+      seen[i] = 1;
+      const p = i * 4;
+      d[p] = d[p+1] = d[p+2] = target;
+      d[p+3] = 255;
+      painted++;
+      // queue the rows above and below
+      if (y > 0) { const up = i - w; if (!seen[up] && matches(up)) stack.push([xi, y - 1]); }
+      if (y < h - 1) { const dn = i + w; if (!seen[dn] && matches(dn)) stack.push([xi, y + 1]); }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return painted > 0;
+}
+
+// Snapshot used by "undo last stroke" (separate from the global history so a
+// brush does not flood the undo stack).
+let paintBefore = null;
+function paintBegin() {
+  if (!doc) return;
+  const snap = document.createElement("canvas");
+  snap.width = doc.canvas.width;
+  snap.height = doc.canvas.height;
+  snap.getContext("2d").drawImage(doc.canvas, 0, 0);
+  paintBefore = snap;
+}
+function paintUndoLast() {
+  if (!doc || !paintBefore) { toast("Нема що скасовувати", 1600); return; }
+  doc.canvas.getContext("2d").clearRect(0, 0, doc.canvas.width, doc.canvas.height);
+  doc.canvas.getContext("2d").drawImage(paintBefore, 0, 0);
+  paintBefore = null;
+  render();
+  toast("Мазок скасовано", 1500);
+}
+
+// Commit the draft stroke/line to the bitmap.
+function paintCommitDraft(pts) {
+  if (!doc) return;
+  pushHistory();
+  const ctx = doc.canvas.getContext("2d", { willReadFrequently: true });
+  ctx.save();
+  if (paint.onlyBad) {
+    const w = doc.canvas.width, h = doc.canvas.height;
+    const mcan = document.createElement("canvas");
+    mcan.width = w; mcan.height = h;
+    mcan.getContext("2d").putImageData(paintMaskForBad(ctx, w, h), 0, 0);
+
+    // Stroke goes into its OWN layer, then `source-in` keeps only the pixels
+    // where the stencil is opaque. `destination-in` cannot be used here: it
+    // clears colour but the stroke still covers the whole canvas with alpha
+    // 255, so the stencil would never cut anything.
+    const lay = document.createElement("canvas");
+    lay.width = w; lay.height = h;
+    const lctx = lay.getContext("2d");
+    const ink = paintColorValue() ? "#fff" : "#000";
+    lctx.fillStyle = ink;
+    lctx.strokeStyle = ink;
+    lctx.fillRect(0, 0, 0, 0);   // no-op, keeps the ink variable honest
+    for (let i = 0; i < pts.length - 1; i++) paintStrokeSegment(lctx, pts[i], pts[i + 1]);
+    if (pts.length === 1) paintDab(lctx, pts[0].x, pts[0].y, paintRadius(), paintColorValue(), paint.shape);
+    lctx.globalCompositeOperation = "source-in";
+    lctx.drawImage(mcan, 0, 0);
+    ctx.drawImage(lay, 0, 0);
+  } else {
+    for (let i = 0; i < pts.length - 1; i++) paintStrokeSegment(ctx, pts[i], pts[i + 1]);
+    if (pts.length === 1) paintDab(ctx, pts[0].x, pts[0].y, paintRadius(), paintColorValue(), paint.shape);
+  }
+  ctx.restore();
+  render();
+}
+
+// Live stroke preview on the overlay (so the bitmap is untouched mid-drag).
+function paintDrawDraft() {
+  const d = paint.draft;
+  if (!d) return;
+  const s = imgToScreen;
+  ctxTls.save();
+  ctxTls.strokeStyle = paintColorValue() ? "rgba(255,255,255,.9)" : "rgba(0,0,0,.75)";
+  ctxTls.lineWidth = Math.max(1, paint.size * view.scale);
+  ctxTls.lineCap = paint.shape === "square" ? "butt" : "round";
+  ctxTls.lineJoin = "round";
+  if (d.kind === "line") {
+    const a = s(d.from.x, d.from.y), b = s(d.to.x, d.to.y);
+    ctxTls.beginPath(); ctxTls.moveTo(a.x, a.y); ctxTls.lineTo(b.x, b.y); ctxTls.stroke();
+  } else if (d.pts && d.pts.length) {
+    ctxTls.beginPath();
+    d.pts.forEach((p, i) => {
+      const q = s(p.x, p.y);
+      if (!i) ctxTls.moveTo(q.x, q.y); else ctxTls.lineTo(q.x, q.y);
+    });
+    if (d.pts.length === 1) {
+      const q = s(d.pts[0].x, d.pts[0].y);
+      ctxTls.fillStyle = paintColorValue() ? "rgba(255,255,255,.9)" : "rgba(0,0,0,.75)";
+      ctxTls.beginPath(); ctxTls.arc(q.x, q.y, Math.max(1, paint.size * view.scale / 2), 0, Math.PI * 2);
+      ctxTls.fill();
+    } else ctxTls.stroke();
+  }
+  ctxTls.restore();
+}
+
+/* ---------- PAINT UI wiring ---------- */
+function paintSetMode(m) {
+  paint.mode = m;
+  document.querySelectorAll("#paintModeRow .btn").forEach(b =>
+    b.classList.toggle("active-mode", b.dataset.paint === m));
+  if (m === "fill") setCursor("copy");
+  else if (m === "erase") setCursor("cell");
+  else setCursor("crosshair");
+  document.getElementById("paintSize").disabled = (m === "fill");
+}
+function paintSetShape(s) {
+  paint.shape = s;
+  document.querySelectorAll("#paintShapeRow .btn").forEach(b =>
+    b.classList.toggle("active-mode", b.dataset.paintshape === s));
+}
+function paintSetColor(v) {
+  paint.value = v;
+  paint.mode = paint.mode === "erase" ? "brush" : paint.mode;
+  document.querySelectorAll("#paintColorRow .btn").forEach(b =>
+    b.classList.toggle("active-mode", (b.dataset.paintcolor === "white") === (v === 255)));
+  document.querySelectorAll("#paintModeRow .btn").forEach(b =>
+    b.classList.toggle("active-mode", b.dataset.paint === paint.mode));
+}
+
+paintSetMode("brush");
+paintSetShape("round");
+paintSetColor(0);
+
+document.querySelectorAll("#paintModeRow .btn").forEach(b => b.onclick = () => paintSetMode(b.dataset.paint));
+document.querySelectorAll("#paintShapeRow .btn").forEach(b => b.onclick = () => paintSetShape(b.dataset.paintshape));
+document.querySelectorAll("#paintColorRow .btn").forEach(b => b.onclick = () => paintSetColor(b.dataset.paintcolor === "white" ? 255 : 0));
+document.querySelectorAll("[data-paintpreset]").forEach(b => b.onclick = () => {
+  const v = +b.dataset.paintpreset;
+  document.getElementById("paintSize").value = v;
+  document.getElementById("paintSizeVal").textContent = v;
+  paint.size = v;
+});
+
+document.getElementById("paintSize").oninput = (e) => {
+  paint.size = +e.target.value;
+  document.getElementById("paintSizeVal").textContent = e.target.value;
+};
+document.getElementById("paintLevel").oninput = (e) => {
+  paint.level = +e.target.value;
+  document.getElementById("paintLevelVal").textContent = e.target.value;
+};
+document.getElementById("paintThresh").onchange = (e) => { paint.onlyBad = e.target.checked; };
+document.getElementById("paintSnap").onchange = (e) => { paint.snap = e.target.checked; };
+document.getElementById("paintUndo").onclick = paintUndoLast;
+
+/* ============================================================
    GLOBAL UI WIRING
    ============================================================ */
 /* ---------- BINARIZE UI wiring ---------- */
@@ -2860,47 +3354,91 @@ binPickBtn.onclick = () => {
   binState.picking = true;
   document.body.classList.add("picking-trace");
   setCursor("crosshair");
-  toast("Тицніть у доріжку на платі", 3000);
+  if (binState.sample && !binState.sample2) {
+    toast("Тицніть у доріжку іншого кольору (або ✕ щоб скасувати)", 3200);
+  } else {
+    toast("Тицніть у доріжку на платі", 3000);
+  }
 };
 
 function binClearSample() {
   binState.sample = null;
+  binState.sample2 = null;
   binState.picking = false;
   document.body.classList.remove("picking-trace");
-  const thumb = document.getElementById("binThumb");
-  thumb.style.background = "";
+  document.getElementById("binThumb").style.background = "";
   document.getElementById("binMeta").textContent = "не вибрано";
+  document.getElementById("binSample2Row").style.display = "none";
   document.getElementById("binPickReset").disabled = true;
   binInvalidate();
   render();
 }
 document.getElementById("binPickReset").onclick = binClearSample;
 
+document.getElementById("binPickReset2").onclick = () => {
+  binState.sample2 = null;
+  document.getElementById("binSample2Row").style.display = "none";
+  binInvalidate();
+  toast("Другий зразок прибрано", 1800);
+};
+
 // Called from the stage click handler while the eyedropper is armed.
+// First click sets sample 1; the next click sets sample 2 (drop it if it is
+// almost the same colour, so a double click does not create a duplicate).
 function binHandlePick(ip) {
   const s = pickPixelAt(ip.x, ip.y);
   if (!s) return false;
-  binState.sample = s;
+
+  const isSecond = !!binState.sample && !binState.sample2;
+  if (isSecond) {
+    const near = colorDistance(s.r, s.g, s.b, binState.sample.r, binState.sample.g, binState.sample.b) < 12;
+    if (near) {
+      binState.picking = false;
+      document.body.classList.remove("picking-trace");
+      toast("Це той самий колір — другий зразок не потрібен", 2600);
+      binInvalidate();
+      return true;
+    }
+  }
+
   binState.picking = false;
   document.body.classList.remove("picking-trace");
 
-  const thumb = document.getElementById("binThumb");
-  thumb.style.background = `rgb(${s.r},${s.g},${s.b})`;
   const hsv = rgb2hsv(s.r, s.g, s.b);
-  document.getElementById("binMeta").textContent =
-    `RGB ${s.r},${s.g},${s.b} · H ${Math.round(hsv.h)}° S ${Math.round(hsv.s*100)}%`;
-  document.getElementById("binPickReset").disabled = false;
+  const desc = `RGB ${s.r},${s.g},${s.b} · H ${Math.round(hsv.h)}° S ${Math.round(hsv.s*100)}%`;
 
-  // auto-suggest a threshold from the neighbourhood so the first result is close
-  const T = suggestThreshold(ip.x, ip.y, s);
-  binState.thresh = T;
-  document.getElementById("binThresh").value = T;
-  document.getElementById("binThreshVal").textContent = T;
+  if (isSecond) {
+    binState.sample2 = s;
+    document.getElementById("binThumb2").style.background = `rgb(${s.r},${s.g},${s.b})`;
+    document.getElementById("binMeta2").textContent = desc;
+    document.getElementById("binSample2Row").style.display = "flex";
+    // keep the existing threshold: it already fits the first colour
+  } else {
+    binState.sample = s;
+    binState.sample2 = null;
+    document.getElementById("binThumb").style.background = `rgb(${s.r},${s.g},${s.b})`;
+    document.getElementById("binMeta").textContent = desc;
+    document.getElementById("binSample2Row").style.display = "none";
+    // auto-suggest a threshold from the neighbourhood so the first result is close
+    const T = suggestThreshold(ip.x, ip.y, s);
+    binState.thresh = T;
+    document.getElementById("binThresh").value = T;
+    document.getElementById("binThreshVal").textContent = T;
+  }
+
+  document.getElementById("binPickReset").disabled = false;
 
   // picking a colour only makes sense in colour/adaptive mode
   if (binState.mode === "luma") binSetMode("color");
   binInvalidate();
-  toast(`Зразок узято. Поріг ≈ ${T}`, 2600);
+
+  if (isSecond) {
+    toast("Другий зразок узято. Обидва кольори йдуть в одну маску.", 3000);
+  } else if (binState.sample2) {
+    toast(`Зразок узято. Поріг ≈ ${binState.thresh}`, 2600);
+  } else {
+    toast(`Зразок узято. Поріг ≈ ${binState.thresh}. Можна вказати ще один колір.`, 3200);
+  }
   return true;
 }
 
@@ -3020,6 +3558,18 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "d" || e.key === "D") switchTool("detect");
   if (e.key === "b" || e.key === "B") switchTool("binary");
   if (e.key === "e" || e.key === "E") switchTool("export");
+  if (e.key === "m" || e.key === "M") switchTool("paint");
+  if (tool === "paint") {
+    if (e.key === "b" || e.key === "B") paintSetMode("brush");
+    if (e.key === "l" || e.key === "L") paintSetMode("line");
+    if (e.key === "f" || e.key === "F") paintSetMode("fill");
+    if (e.key === "x" || e.key === "X") paintSetMode("erase");
+    if (e.key === "[" || e.key === "]") {
+      const el = document.getElementById("paintSize");
+      const v = clamp(+el.value + (e.key === "]" ? 2 : -2), 1, 200);
+      el.value = v; el.oninput({ target: el });
+    }
+  }
   if (e.key === "Escape") {
     twoPoints = [];
     if (binState.picking) {
