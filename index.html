@@ -408,6 +408,7 @@
         </div>
 
         <button class="btn primary" id="compAddBtn">+ Додати компонент</button>
+        <p class="hint" id="compSnapHint" style="margin:10px 0 0">Тисніть приблизно в отвір — центр знайдеться сам за схожим кольором, товщина кліку не важлива.</p>
         <p class="status" id="compStatus"></p>
 
         <!-- Список доданих -->
@@ -574,8 +575,25 @@ function drawOverlay() {
   // component markers (overlay)
   if (tool === "detect") {
     const drawMarkers = (c, isPending) => {
+      // detected hole circles (snapped contacts)
       c.clicks.forEach((pt, idx) => {
         const s = imgToScreen(pt.x, pt.y);
+        if (pt.r > 0) {
+          ctxOvl.beginPath();
+          ctxOvl.arc(s.x, s.y, Math.max(3, pt.r * view.scale), 0, Math.PI * 2);
+          ctxOvl.strokeStyle = isPending ? "rgba(245,158,11,.95)" : "rgba(16,185,129,.95)";
+          ctxOvl.lineWidth = 1.5;
+          ctxOvl.setLineDash([3, 2]);
+          ctxOvl.stroke();
+          ctxOvl.setLineDash([]);
+          // crosshair through the centre
+          ctxOvl.strokeStyle = isPending ? "rgba(245,158,11,.7)" : "rgba(16,185,129,.7)";
+          ctxOvl.lineWidth = 1;
+          ctxOvl.beginPath();
+          ctxOvl.moveTo(s.x - 5, s.y); ctxOvl.lineTo(s.x + 5, s.y);
+          ctxOvl.moveTo(s.x, s.y - 5); ctxOvl.lineTo(s.x, s.y + 5);
+          ctxOvl.stroke();
+        }
         ctxOvl.beginPath();
         ctxOvl.arc(s.x, s.y, 7, 0, Math.PI * 2);
         ctxOvl.fillStyle = isPending ? "rgba(245,158,11,.55)" : "rgba(37,99,235,.6)";
@@ -1498,6 +1516,105 @@ const FOOTPRINTS = {
 let components = [];
 let pendingComponent = null;    // component being placed (awaiting clicks)
 let hoverImgPt = null;
+let lastSnap = null;            // result of the last hole snap (for feedback)
+
+/* ---------------- automatic hole detection ---------------- */
+// The user clicks roughly inside a hole; we flood-fill the region of similar
+// colour around that point, take the largest blob that still looks round, and
+// use its centre as the contact coordinate.
+function getDocPixels() {
+  if (!doc) return null;
+  if (!doc._pix || doc._pixSrc !== doc.canvas || doc._pixW !== doc.canvas.width || doc._pixH !== doc.canvas.height) {
+    const c = document.createElement("canvas");
+    c.width = doc.canvas.width;
+    c.height = doc.canvas.height;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(doc.canvas, 0, 0);
+    let data;
+    try { data = g.getImageData(0, 0, c.width, c.height); } catch (e) { return null; }
+    doc._pix = data;
+    doc._pixSrc = doc.canvas;
+    doc._pixW = c.width;
+    doc._pixH = c.height;
+  }
+  return doc._pix;
+}
+
+// Colour tolerance: same hole may be unevenly lit; holes vs copper differ a lot.
+const HOLE_COLOR_TOL = 46;     // max per-channel-ish distance from seed colour
+const HOLE_SNAP_MAX_RADIUS = 120; // px in image space, safety cap
+
+function snapToHole(ip, opts) {
+  opts = opts || {};
+  const imgData = getDocPixels();
+  if (!imgData) return null;
+  const W = imgData.width, H = imgData.height, data = imgData.data;
+  const sx = Math.round(ip.x), sy = Math.round(ip.y);
+  if (sx < 1 || sy < 1 || sx >= W - 1 || sy >= H - 1) return null;
+
+  const idx = (x, y) => (y * W + x) * 4;
+  const si = idx(sx, sy);
+  const sr = data[si], sg = data[si + 1], sb = data[si + 2];
+  const tol2 = HOLE_COLOR_TOL * HOLE_COLOR_TOL * 3;
+
+  const similar = (i) => {
+    const dr = data[i] - sr, dg = data[i + 1] - sg, db = data[i + 2] - sb;
+    return (dr * dr + dg * dg + db * db) <= tol2;
+  };
+
+  // --- flood fill (scanline-ish BFS with a visited bitmap) ---
+  const visited = new Uint8Array(W * H);
+  const stack = [sy * W + sx];
+  visited[sy * W + sx] = 1;
+  const pts = [];
+  let minX = sx, maxX = sx, minY = sy, maxY = sy;
+  let sumX = 0, sumY = 0, count = 0;
+  const maxArea = Math.PI * HOLE_SNAP_MAX_RADIUS * HOLE_SNAP_MAX_RADIUS;
+
+  while (stack.length) {
+    const p = stack.pop();
+    const x = p % W, y = (p - x) / W;
+    const i = p * 4;
+    if (!similar(i)) continue;
+    count++; sumX += x; sumY += y;
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+    if (count > maxArea * 1.6) return null; // ran away into the background
+    const nbrs = [p - 1, p + 1, p - W, p + W];
+    for (let k = 0; k < 4; k++) {
+      const q = nbrs[k];
+      if (q < 0 || q >= W * H) continue;
+      const qx = q % W, qy = (q - qx) / W;
+      if (Math.abs(qx - x) + Math.abs(qy - y) !== 1) continue; // no wrap
+      if (visited[q]) continue;
+      visited[q] = 1;
+      stack.push(q);
+    }
+  }
+  if (count < 12) return null;
+  if (!pts.length) { /* pts unused, centroid below */ }
+
+  const bw = maxX - minX + 1, bh = maxY - minY + 1;
+  const area = count;
+  const bboxArea = bw * bh;
+  const fillRatio = area / bboxArea;
+  const aspect = Math.max(bw, bh) / Math.max(1, Math.min(bw, bh));
+  // a hole reads as a filled disc: ~0.78 of its bbox, near-square
+  if (fillRatio < 0.5 || fillRatio > 0.98 || aspect > 1.45) return null;
+  const radius = Math.sqrt(area / Math.PI);
+  if (radius < 1.2 || radius > HOLE_SNAP_MAX_RADIUS) return null;
+  // the click must be reasonably close to the blob centre
+  const cx = sumX / count, cy = sumY / count;
+  const dToCentre = Math.hypot(sx - cx, sy - cy);
+  if (dToCentre > radius * 2 + 4) return null;
+
+  return {
+    x: cx, y: cy, r: radius,
+    area, fillRatio, aspect,
+    colour: [sr, sg, sb],
+    dToCentre,
+  };
+}
 
 /* ---------------- UI wiring ---------------- */
 const compPickType = document.getElementById("compPickType");
@@ -1530,7 +1647,10 @@ function updateKindParams() {
   }
 }
 
-compPickType.onchange = rebuildKindOptions;
+compPickType.onchange = () => {
+  rebuildKindOptions();
+  updateCompAddButton();
+};
 compKind.onchange = updateKindParams;
 
 compAddBtn.onclick = () => {
@@ -1573,6 +1693,10 @@ function pickLabel(p) {
 }
 
 function updateCompAddButton() {
+  const hint = document.getElementById("compSnapHint");
+  if (hint) {
+    hint.style.display = compPickType.value === "point" ? "none" : "block";
+  }
   compAddBtn.disabled = !!pendingComponent;
   compAddBtn.textContent = pendingComponent ? "Розміщення…" : "+ Додати компонент";
 }
@@ -1581,7 +1705,26 @@ function updateCompAddButton() {
 function handleComponentClick(ip) {
   if (!pendingComponent) return false;
   const c = pendingComponent;
-  c.clicks.push({ x: ip.x, y: ip.y });
+
+  // For holes/pads: snap the rough click to the real centre of the blob.
+  let pt = { x: ip.x, y: ip.y };
+  let snapped = null;
+  if (c.pickType !== "point") {
+    const s = snapToHole(ip);
+    if (s) { pt = { x: s.x, y: s.y, r: s.r }; snapped = s; }
+  }
+  lastSnap = snapped;
+
+  // reject a duplicate click on the same hole
+  const dup = c.clicks.find(q => Math.hypot(q.x - pt.x, q.y - pt.y) < Math.max(2, (pt.r || 3) * 0.8));
+  if (dup) {
+    compStatus.className = "status err";
+    compStatus.textContent = "Цей отвір уже позначено — клікніть наступний";
+    drawOverlay(); drawToolLayer();
+    return true;
+  }
+
+  c.clicks.push(pt);
   const done = c.clicks.length >= c.count;
 
   if (done) {
