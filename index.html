@@ -788,6 +788,29 @@ function pxToUnit(px) {
   const mm = px / doc.pxPerMm;
   return unit === "mm" ? mm : mm / 25.4;
 }
+
+// Rounds to a sane display precision without inventing or dropping digits.
+function fmtNum(v) {
+  const r = Math.round(v * 100) / 100;
+  return Number.isInteger(r) ? String(r) : r.toFixed(2);
+}
+function fmtUnitPx(px, ppm) {
+  if (!ppm) return "—";
+  const mm = px / ppm;
+  return fmtNum(unit === "mm" ? mm : mm / 25.4) + (unit === "mm" ? " мм" : "″");
+}
+// Sole source of truth for the size fields: the bitmap itself.
+// Called after every operation that changes doc.canvas.
+function syncScaleFields() {
+  if (!doc || !doc.pxPerMm) return;
+  const wEl = document.getElementById("scaleW");
+  const hEl = document.getElementById("scaleH");
+  if (!wEl || !hEl) return;
+  wEl.value = fmtNum(doc.canvas.width / doc.pxPerMm);
+  hEl.value = fmtNum(doc.canvas.height / doc.pxPerMm);
+}
+
+/** @deprecated use fmtUnitPx */
 function fmtUnit(px) {
   const v = pxToUnit(px);
   if (v == null) return "—";
@@ -814,12 +837,13 @@ function updateSizeLabel() {
   }
 
   const w = doc.canvas.width, h = doc.canvas.height;
-  if (doc.pxPerMm) {
-    sizeEl.textContent = `${fmtUnit(w)} × ${fmtUnit(h)}`;
-    const dpi = doc.pxPerMm * 25.4;
-    dpiEl.textContent = `Масштаб: ${dpi.toFixed(0)} DPI · ${doc.pxPerMm.toFixed(1)} px/мм`;
-    cornerMain.textContent = `${fmtUnit(w)} × ${fmtUnit(h)}`;
-    cornerSub.textContent = `${dpi.toFixed(0)} DPI · ${doc.pxPerMm.toFixed(1)} px/мм`;
+  const ppm = doc.pxPerMm;
+  if (ppm) {
+    sizeEl.textContent = `${fmtUnitPx(w, ppm)} × ${fmtUnitPx(h, ppm)}`;
+    const dpi = ppm * 25.4;
+    dpiEl.textContent = `Масштаб: ${dpi.toFixed(0)} DPI · ${ppm.toFixed(2)} px/мм`;
+    cornerMain.textContent = `${fmtUnitPx(w, ppm)} × ${fmtUnitPx(h, ppm)}`;
+    cornerSub.textContent = `${w} × ${h} px · ${ppm.toFixed(2)} px/мм · ${dpi.toFixed(0)} DPI`;
   } else {
     sizeEl.textContent = `${w} × ${h} px`;
     dpiEl.textContent = "Масштаб: не визначено";
@@ -835,8 +859,8 @@ function updateSizeLabel() {
   if (frameRow && frameVal) {
     frameRow.style.display = showFrame ? "flex" : "none";
     if (showFrame) {
-      frameVal.textContent = doc.pxPerMm
-        ? `${fmtUnit(cropRect.w)} × ${fmtUnit(cropRect.h)}`
+      frameVal.textContent = ppm
+        ? `${fmtUnitPx(cropRect.w, ppm)} × ${fmtUnitPx(cropRect.h, ppm)}`
         : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`;
     }
   }
@@ -845,17 +869,17 @@ function updateSizeLabel() {
 
   if (cropRect && tool === "crop" && document.querySelector('.pane[data-pane="crop"]').classList.contains("active")) {
     const el = document.getElementById("cropSize");
-    el.textContent = doc.pxPerMm
-      ? `${fmtUnit(cropRect.w)} × ${fmtUnit(cropRect.h)}`
+    el.textContent = ppm
+      ? `${fmtUnitPx(cropRect.w, ppm)} × ${fmtUnitPx(cropRect.h, ppm)}`
       : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`;
   }
 
   // scale pane current
   const scEl = document.getElementById("scaleCurrent");
   const scPx = document.getElementById("scalePxPerMm");
-  if (doc.pxPerMm) {
-    scEl.textContent = `${fmtUnit(w)} × ${fmtUnit(h)}`;
-    scPx.textContent = `${doc.pxPerMm.toFixed(2)} px / мм`;
+  if (ppm) {
+    scEl.textContent = `${fmtUnitPx(w, ppm)} × ${fmtUnitPx(h, ppm)}`;
+    scPx.textContent = `${ppm.toFixed(2)} px / мм`;
   } else {
     scEl.textContent = `${w} × ${h} px`;
     scPx.textContent = "px / мм: невідомо";
@@ -1452,8 +1476,8 @@ document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
       : Math.max(1, roundValue(mmH, type));
 
     // show the targets before applying, so the user sees what happens
-    wEl.value = tW;
-    hEl.value = tH;
+    wEl.value = fmtNum(tW);
+    hEl.value = fmtNum(tH);
 
     // apply immediately: rescale the bitmap to exactly tW x tH mm
     scaleToExactSize(tW, tH);
@@ -1480,6 +1504,7 @@ function scaleToExactSize(mmW, mmH) {
   doc.canvas = out;
   fitToView();
   render();
+  syncScaleFields();
   return { w: out.width, h: out.height };
 }
 
@@ -1508,6 +1533,7 @@ function scaleCanvasTo(pxPerMm) {
   doc.pxPerMm = pxPerMm;
   fitToView();
   render();
+  syncScaleFields();
 }
 
 document.getElementById("scaleWhApply").onclick = () => {
@@ -1516,23 +1542,34 @@ document.getElementById("scaleWhApply").onclick = () => {
     toast("Спершу визначте масштаб (інструмент «Компоненти»)", 3000);
     return;
   }
-  const wIn = parseFloat(document.getElementById("scaleW").value);
-  const hIn = parseFloat(document.getElementById("scaleH").value);
+  const wEl = document.getElementById("scaleW");
+  const hEl = document.getElementById("scaleH");
+  const wIn = parseFloat(wEl.value);
+  const hIn = parseFloat(hEl.value);
   const lock = document.getElementById("scaleLock").checked;
   const w = doc.canvas.width, h = doc.canvas.height;
+  const aspect = h / w;
 
+  // The TYPED numbers are the target. The image is fitted to them,
+  // never the other way round. Empty/invalid field = keep current size.
+  let tW, tH;
   if (lock) {
-    if (wIn > 0) scaleToExactSize(wIn, wIn * (h / w));
-    else if (hIn > 0) scaleToExactSize(hIn * (w / h), hIn);
+    if (wIn > 0) { tW = wIn; tH = wIn * aspect; }
+    else if (hIn > 0) { tH = hIn; tW = hIn / aspect; }
     else { toast("Введіть хоча б один розмір"); return; }
   } else {
-    if (!(wIn > 0) || !(hIn > 0)) { toast("Введіть обидва розміри"); return; }
-    scaleToExactSize(wIn, hIn);
+    tW = wIn > 0 ? wIn : w / doc.pxPerMm;
+    tH = hIn > 0 ? hIn : h / doc.pxPerMm;
+    if (!(wIn > 0) && !(hIn > 0)) { toast("Введіть хоча б один розмір"); return; }
   }
-  // report the real result, not the typed one
-  document.getElementById("scaleH").value = (doc.canvas.height / doc.pxPerMm).toFixed(2);
-  document.getElementById("scaleW").value = (doc.canvas.width / doc.pxPerMm).toFixed(2);
-  toast(`Фактично: ${actualSizeText()}`);
+  if (!(tW > 0) || !(tH > 0)) { toast("Розмір має бути більше нуля"); return; }
+
+  const res = scaleToExactSize(tW, tH);
+  syncScaleFields();
+  if (!res) { toast("Не вдалося змінити розмір"); return; }
+  const realW = res.w / doc.pxPerMm, realH = res.h / doc.pxPerMm;
+  const off = Math.abs(realW - tW) > 0.02 || Math.abs(realH - tH) > 0.02;
+  toast(`${actualSizeText()}${off ? " (округлено до цілих пікселів)" : ""}`);
 };
 
 document.getElementById("scaleTwoApply").onclick = () => {
