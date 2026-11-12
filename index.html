@@ -797,7 +797,11 @@ function fmtNum(v) {
 function fmtUnitPx(px, ppm) {
   if (!ppm) return "—";
   const mm = px / ppm;
-  return fmtNum(unit === "mm" ? mm : mm / 25.4) + (unit === "mm" ? " мм" : "″");
+  const v = unit === "mm" ? mm : mm / 25.4;
+  // never show "100.01" for an exact 100 mm: snap away rounding noise
+  const snapped = Math.round(v * 100) / 100;
+  return (Number.isInteger(snapped) ? String(snapped) : snapped.toFixed(2))
+    + (unit === "mm" ? " мм" : "″");
 }
 // Sole source of truth for the size fields: the bitmap itself.
 // Called after every operation that changes doc.canvas.
@@ -988,6 +992,7 @@ async function loadFile(file) {
     fitToView();
     updateFilterParams();
     render();
+    syncScaleFields();
     // stay on the Import tool: the user decides when to switch to Crop
     toast("Файл завантажено");
   } catch (err) {
@@ -1285,15 +1290,19 @@ document.getElementById("cropApply").onclick = () => {
   const R = cropRect;
   if (R.w < 4 || R.h < 4) { toast("Рамка занадто мала"); return; }
   pushHistory();
+  // whole width/height so the result is exactly what the frame promised
+  const cw = Math.max(1, Math.round(R.w));
+  const ch = Math.max(1, Math.round(R.h));
   const out = document.createElement("canvas");
-  out.width = Math.round(R.w);
-  out.height = Math.round(R.h);
-  out.getContext("2d").drawImage(doc.canvas, R.x, R.y, R.w, R.h, 0, 0, out.width, out.height);
+  out.width = cw;
+  out.height = ch;
+  out.getContext("2d").drawImage(doc.canvas, R.x, R.y, R.w, R.h, 0, 0, cw, ch);
   doc.canvas = out;
   initCrop();
   fitToView();
   render();
-  toast("Обрізано");
+  syncScaleFields();
+  toast(`Обрізано: ${actualSizeText()}`);
 };
 document.getElementById("cropReset").onclick = () => { if (doc) { initCrop(); drawToolLayer(); } };
 
@@ -1415,7 +1424,8 @@ document.getElementById("perspApply").onclick = () => {
     initPerspective();
     fitToView();
     render();
-    toast("Перспективу випрямлено");
+    syncScaleFields();
+    toast(`Перспективу випрямлено: ${actualSizeText()}`);
   }, 30);
 };
 document.getElementById("perspReset").onclick = () => {
@@ -1440,16 +1450,27 @@ document.querySelectorAll('.pane[data-pane="crop"] .round-btn').forEach(btn => {
     if (!doc || !cropRect) return;
     if (!doc.pxPerMm) { toast("Спершу визначте масштаб", 3000); return; }
     const type = btn.dataset.round;
+    // same fractional-px/mm trap as in scale: snap to whole px/mm first
+    const ratio = normalizePxPerMm();
+    if (ratio !== 1) {
+      cropRect.x = Math.round(cropRect.x * ratio);
+      cropRect.y = Math.round(cropRect.y * ratio);
+      cropRect.w = Math.round(cropRect.w * ratio);
+      cropRect.h = Math.round(cropRect.h * ratio);
+    }
     const mmW = cropRect.w / doc.pxPerMm;
     const mmH = cropRect.h / doc.pxPerMm;
     const tW = roundValue(mmW, type);
     const tH = roundValue(mmH, type);
     if (!(tW >= 1) || !(tH >= 1)) { toast("Результат менший за 1 мм", 2500); return; }
-    cropRect.w = Math.min(tW * doc.pxPerMm, doc.canvas.width - cropRect.x);
-    cropRect.h = Math.min(tH * doc.pxPerMm, doc.canvas.height - cropRect.y);
+    // whole px so the applied crop is exactly tW x tH mm
+    const framePxW = Math.round(tW * doc.pxPerMm);
+    const framePxH = Math.round(tH * doc.pxPerMm);
+    cropRect.w = Math.min(framePxW, doc.canvas.width - cropRect.x);
+    cropRect.h = Math.min(framePxH, doc.canvas.height - cropRect.y);
     drawToolLayer();
     updateSizeLabel();
-    toast(`Рамка: ${(cropRect.w / doc.pxPerMm).toFixed(2)} × ${(cropRect.h / doc.pxPerMm).toFixed(2)} мм`, 2400);
+    toast(`Рамка: ${fmtUnitPx(Math.round(cropRect.w), doc.pxPerMm)} × ${fmtUnitPx(Math.round(cropRect.h), doc.pxPerMm)}`, 2400);
   };
 });
 
@@ -1491,12 +1512,43 @@ document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
 // Resize the bitmap so its physical size is exactly mmW x mmH.
 // The px/mm stays untouched, so the board keeps its real dimensions and
 // the canvas just gains or loses resolution.
+// Resize the bitmap so its physical size is exactly mmW x mmH.
+//
+// A fractional px/mm is what breaks exact sizes: at 3.7795 px/mm, 100 mm
+// needs 377.95 px, Math.round gives 378, and 378 / 3.7795 = 100.01 mm.
+// Every apply then drifts a little further (124.09 x 142.08 and so on).
+// Fix: snap px/mm to a whole number first and rescale the bitmap to it, so
+// 1 mm is always an integer number of pixels and the requested size is
+// reproduced exactly.
+function normalizePxPerMm() {
+  if (!doc || !doc.pxPerMm) return 1;
+  const target = Math.max(1, Math.round(doc.pxPerMm));
+  if (Math.abs(target - doc.pxPerMm) < 1e-9) return 1;
+  const outW = clamp(Math.round(doc.canvas.width * target / doc.pxPerMm), 1, 20000);
+  const outH = clamp(Math.round(doc.canvas.height * target / doc.pxPerMm), 1, 20000);
+  const out = document.createElement("canvas");
+  out.width = outW; out.height = outH;
+  const o = out.getContext("2d");
+  o.imageSmoothingEnabled = true;
+  o.imageSmoothingQuality = "high";
+  o.drawImage(doc.canvas, 0, 0, outW, outH);
+  doc.canvas = out;
+  const ratio = target / doc.pxPerMm;
+  doc.pxPerMm = target;
+  return ratio;
+}
+
 function scaleToExactSize(mmW, mmH) {
   if (!doc || !(mmW > 0) || !(mmH > 0)) return;
   pushHistory();
+
+  // make 1 mm a whole number of pixels before measuring anything
+  normalizePxPerMm();
+  const ppm = doc.pxPerMm;
+
   const out = document.createElement("canvas");
-  out.width = clamp(Math.round(mmW * doc.pxPerMm), 1, 20000);
-  out.height = clamp(Math.round(mmH * doc.pxPerMm), 1, 20000);
+  out.width = clamp(Math.round(mmW * ppm), 1, 20000);
+  out.height = clamp(Math.round(mmH * ppm), 1, 20000);
   const o = out.getContext("2d");
   o.imageSmoothingEnabled = true;
   o.imageSmoothingQuality = "high";
@@ -1514,7 +1566,7 @@ function actualSizeText() {
   if (!doc) return "—";
   const w = doc.canvas.width, h = doc.canvas.height;
   if (!doc.pxPerMm) return `${w} × ${h} px`;
-  return `${fmtUnit(w)} × ${fmtUnit(h)}`;
+  return `${fmtUnitPx(w, doc.pxPerMm)} × ${fmtUnitPx(h, doc.pxPerMm)}`;
 }
 
 function scaleCanvasTo(pxPerMm) {
