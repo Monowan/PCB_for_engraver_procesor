@@ -419,6 +419,7 @@ let twoPoints = [];            // image coords, max 2
 
 // detection results
 let detections = [];
+let highlighted = null;
 
 // undo history (canvas snapshots, capped)
 const history = [];
@@ -498,9 +499,11 @@ function drawOverlay() {
 
   // detection markers
   if (tool === "detect" && detections.length) {
+    const hlSet = highlighted ? new Set(highlighted) : null;
     detections.forEach((d) => {
       const c = imgToScreen(d.x, d.y);
       const w = d.bw * view.scale, h = d.bh * view.scale;
+      const isHl = hlSet && hlSet.has(d);
       ctxOvl.beginPath();
       if (d.round) {
         const r = Math.max(4, (d.bw / 2) * view.scale);
@@ -508,10 +511,17 @@ function drawOverlay() {
       } else {
         ctxOvl.rect(c.x - w / 2, c.y - h / 2, Math.max(4, w), Math.max(4, h));
       }
-      ctxOvl.strokeStyle = d.matched ? "#16a34a" : "#f59e0b";
-      ctxOvl.lineWidth = 2;
+      const base = d.matched ? "#16a34a" : "#f59e0b";
+      const col = isHl ? "#2563eb" : base;
+      // dark halo for contrast on any background
+      ctxOvl.strokeStyle = "rgba(0,0,0,.55)";
+      ctxOvl.lineWidth = isHl ? 5 : 3.5;
       ctxOvl.stroke();
-      ctxOvl.fillStyle = d.matched ? "rgba(22,163,74,.15)" : "rgba(245,158,11,.15)";
+      ctxOvl.strokeStyle = col;
+      ctxOvl.lineWidth = isHl ? 3 : 2;
+      ctxOvl.stroke();
+      ctxOvl.fillStyle = isHl ? "rgba(37,99,235,.30)"
+                       : (d.matched ? "rgba(22,163,74,.12)" : "rgba(245,158,11,.12)");
       ctxOvl.fill();
     });
   }
@@ -1245,26 +1255,45 @@ document.getElementById("scaleW").addEventListener("input", () => {
 });
 
 /* ============================================================
-   COMPONENT DETECTION (MVP)
+   COMPONENT DETECTION — full implementation
+   Pipeline:
+     1. luminance + Otsu threshold (+ auto polarity)
+     2. morphological open (3x3) to kill noise
+     3. connected components (4-neigh) with centroids + shape stats
+     4. nested-hole detection (ring structures: pad with drill inside)
+     5. shape classification (circle / rect / ring) + sub-pixel centroid
+     6. scale estimation via multi-hypothesis consensus (RANSAC-like)
+     7. component grouping (pad grids -> DIP/SOIC/SOT/QFP footprints)
+     8. auto-align: apply estimated scale + deskew by pad-row angle
    ============================================================ */
+
+// SMD / IC footprint library (pad width, pitches)
 const SMD_LIB = [
-  { name: "0402", padW: 0.5, pitchX: 1.0, pitchY: 0.55 },
-  { name: "0603", padW: 0.8, pitchX: 1.6, pitchY: 0.95 },
-  { name: "0805", padW: 1.0, pitchX: 1.9, pitchY: 1.4 },
-  { name: "1206", padW: 1.6, pitchX: 3.1, pitchY: 1.6 },
-  { name: "SOT-23", padW: 0.9, pitchX: 2.4, pitchY: 1.9 },
-  { name: "SOIC-8", padW: 0.6, pitchX: 5.4, pitchY: 1.27 },
-  { name: "DIP-8", padW: 1.6, pitchX: 7.62, pitchY: 2.54 },
-  { name: "DIP-16", padW: 1.6, pitchX: 15.24, pitchY: 2.54 },
+  { name: "0402",   padW: 0.50, pitchX: 1.00, pitchY: 0.55 },
+  { name: "0603",   padW: 0.80, pitchX: 1.60, pitchY: 0.95 },
+  { name: "0805",   padW: 1.00, pitchX: 1.90, pitchY: 1.40 },
+  { name: "1206",   padW: 1.60, pitchX: 3.10, pitchY: 1.60 },
+  { name: "1210",   padW: 1.60, pitchX: 3.20, pitchY: 2.50 },
+  { name: "1812",   padW: 2.00, pitchX: 4.50, pitchY: 3.20 },
+  { name: "SOT-23", padW: 0.90, pitchX: 2.40, pitchY: 1.90 },
+  { name: "SOT-223",padW: 1.50, pitchX: 6.30, pitchY: 2.30 },
+  { name: "SOIC-8", padW: 0.60, pitchX: 5.40, pitchY: 1.27 },
+  { name: "SOIC-16",padW: 0.60, pitchX: 9.90, pitchY: 1.27 },
+  { name: "TSSOP-16",padW: 0.40, pitchX: 5.00, pitchY: 0.65 },
+  { name: "QFP-32", padW: 0.40, pitchX: 7.00, pitchY: 0.80 },
+  { name: "DIP-8",  padW: 1.60, pitchX: 7.62, pitchY: 2.54 },
+  { name: "DIP-16", padW: 1.60, pitchX: 15.24, pitchY: 2.54 },
+  { name: "DIP-20", padW: 1.60, pitchX: 22.86, pitchY: 2.54 },
 ];
 
-// Стандартні діаметри отворів (мм) — типовий набір свердел для PCB
+// Standard drill diameters (mm)
 const HOLE_LIB = [
-  { d: 0.3 }, { d: 0.4 }, { d: 0.5 }, { d: 0.6 }, { d: 0.7 }, { d: 0.8 },
-  { d: 0.9 }, { d: 1.0 }, { d: 1.1 }, { d: 1.2 }, { d: 1.3 }, { d: 1.4 },
-  { d: 1.5 }, { d: 1.6 }, { d: 1.8 }, { d: 2.0 }, { d: 2.2 }, { d: 2.5 },
-  { d: 3.0 }, { d: 3.2 },
+  0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4,
+  1.5, 1.6, 1.8, 2.0, 2.2, 2.5, 3.0, 3.2, 3.5, 4.0,
 ];
+
+// Standard pitches (mm) used to snap measured spacings
+const PITCH_LIB = [0.4, 0.5, 0.65, 0.8, 1.0, 1.27, 1.5, 2.0, 2.5, 2.54, 3.0, 5.08];
 
 document.getElementById("detectBtn").onclick = async () => {
   if (!doc) { toast("Спочатку відкрийте файл"); return; }
@@ -1274,13 +1303,16 @@ document.getElementById("detectBtn").onclick = async () => {
   await new Promise(r => setTimeout(r, 20));
 
   try {
-    const res = detectPads(doc.canvas);
-    detections = res.detections;
+    const minHoleMm = parseFloat(document.getElementById("detMinHole").value) || 0.6;
+    const res = detectPads(doc.canvas, { minHoleMm });
+    window.__lastDetection = res;
+    detections = res.objects;
+    highlighted = null;
     renderDetectionSummary(res);
     drawOverlay();
     statusEl.className = "status ok";
-    statusEl.textContent = `Знайдено ${detections.length} об'єктів`;
-    document.getElementById("detApply").disabled = detections.length === 0;
+    statusEl.textContent = `Знайдено ${res.objects.length} об'єктів · ${res.components.length} груп`;
+    document.getElementById("detApply").disabled = res.objects.length === 0;
   } catch (err) {
     console.error(err);
     statusEl.className = "status err";
@@ -1288,21 +1320,25 @@ document.getElementById("detectBtn").onclick = async () => {
   }
 };
 
-function detectPads(canvas) {
+/* ---------------- luminance + Otsu ---------------- */
+function computeLuminance(canvas) {
   const w = canvas.width, h = canvas.height;
-  const ctx = canvas.getContext("2d");
-  const data = ctx.getImageData(0, 0, w, h).data;
-
-  // ---- 1. Determine polarity & adaptive threshold via Otsu on luminance ----
-  const hist = new Uint32Array(256);
-  const lumArr = new Uint8Array(w * h);
+  const data = canvas.getContext("2d", { willReadFrequently: true })
+    .getImageData(0, 0, w, h).data;
+  const lum = new Uint8Array(w * h);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    const l = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114) | 0;
-    lumArr[p] = l;
-    hist[l]++;
+    // treat transparent pixels as white background
+    if (data[i + 3] < 128) { lum[p] = 255; continue; }
+    lum[p] = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) | 0;
   }
-  // Otsu threshold
-  let total = w * h, sumAll = 0;
+  return { lum, w, h };
+}
+
+function otsuThreshold(lum) {
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < lum.length; i++) hist[lum[i]]++;
+  const total = lum.length;
+  let sumAll = 0;
   for (let t = 0; t < 256; t++) sumAll += t * hist[t];
   let sumB = 0, wB = 0, bestVar = -1, thr = 128;
   for (let t = 0; t < 256; t++) {
@@ -1313,185 +1349,691 @@ function detectPads(canvas) {
     const between = wB * wF * (mB - mF) * (mB - mF);
     if (between > bestVar) { bestVar = between; thr = t; }
   }
+  return thr;
+}
 
-  // Decide polarity: the pixels ABOVE threshold are foreground if those are
-  // the minority (typical: bright pads on dark board, or dark ink on white).
-  let above = 0;
-  for (let p = 0; p < w * h; p++) if (lumArr[p] > thr) above++;
-  const brightIsFg = above < w * h * 0.5;
+/* 3x3 morphological open (erode then dilate) on a binary mask */
+function morphOpen(mask, w, h) {
+  const eroded = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const p = y * w + x;
+      if (!mask[p]) continue;
+      let all = 1;
+      for (let dy = -1; dy <= 1 && all; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          if (!mask[p + dy * w + dx]) { all = 0; break; }
+      eroded[p] = all;
+    }
+  }
+  const out = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const p = y * w + x;
+      if (eroded[p]) { out[p] = 1; continue; }
+      let any = 0;
+      for (let dy = -1; dy <= 1 && !any; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          if (eroded[p + dy * w + dx]) { any = 1; break; }
+      out[p] = any;
+    }
+  }
+  return out;
+}
 
-  const isFg = (p) => brightIsFg ? (lumArr[p] > thr) : (lumArr[p] <= thr);
-
-  // ---- 2. Connected components (BFS, 4-neighbour) ----
+/* ---------------- connected components ---------------- */
+function connectedComponents(mask, w, h, minArea, maxArea) {
   const visited = new Uint8Array(w * h);
-  const blobs = [];
-  const minArea = Math.max(12, Math.round((w * h) / 120000));
-  const maxArea = w * h * 0.25;
-
   const stack = new Int32Array(w * h);
+  const blobs = [];
+  const labels = new Int32Array(w * h).fill(-1);
+
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const p0 = y * w + x;
-      if (visited[p0] || !isFg(p0)) continue;
+      if (visited[p0] || !mask[p0]) continue;
       let sp = 0;
-      stack[sp++] = p0;
-      visited[p0] = 1;
-      let minX = x, maxX = x, minY = y, maxY = y, area = 0;
-      let sumX = 0, sumY = 0;
+      stack[sp++] = p0; visited[p0] = 1;
+      let minX = x, maxX = x, minY = y, maxY = y, area = 0, sumX = 0, sumY = 0;
+      const members = [];
       while (sp) {
         const q = stack[--sp];
         const qx = q % w, qy = (q - qx) / w;
         area++; sumX += qx; sumY += qy;
+        if (members.length < 200000) members.push(q);
         if (qx < minX) minX = qx;
         if (qx > maxX) maxX = qx;
         if (qy < minY) minY = qy;
         if (qy > maxY) maxY = qy;
         let n;
-        if (qx > 0)     { n = q - 1; if (!visited[n] && isFg(n)) { visited[n] = 1; stack[sp++] = n; } }
-        if (qx < w - 1) { n = q + 1; if (!visited[n] && isFg(n)) { visited[n] = 1; stack[sp++] = n; } }
-        if (qy > 0)     { n = q - w; if (!visited[n] && isFg(n)) { visited[n] = 1; stack[sp++] = n; } }
-        if (qy < h - 1) { n = q + w; if (!visited[n] && isFg(n)) { visited[n] = 1; stack[sp++] = n; } }
+        if (qx > 0)     { n = q - 1; if (!visited[n] && mask[n]) { visited[n] = 1; stack[sp++] = n; } }
+        if (qx < w - 1) { n = q + 1; if (!visited[n] && mask[n]) { visited[n] = 1; stack[sp++] = n; } }
+        if (qy > 0)     { n = q - w; if (!visited[n] && mask[n]) { visited[n] = 1; stack[sp++] = n; } }
+        if (qy < h - 1) { n = q + w; if (!visited[n] && mask[n]) { visited[n] = 1; stack[sp++] = n; } }
       }
       if (area < minArea || area > maxArea) continue;
-      const bw = maxX - minX + 1, bh = maxY - minY + 1;
-      const aspect = bw / bh;
-      if (aspect > 4 || aspect < 0.25) continue;      // skip traces/lines
-      const fill = area / (bw * bh);                  // 0.785 = perfect circle, ~1 = rect
-      if (fill < 0.45) continue;                       // ring/hollow or noise
-      // roundness: a circle inscribed in bbox fills π/4 ≈ 0.785
-      // a rect fills ~1.0. Intermediate → rotated rect or blob.
-      const isRound = fill > 0.6 && fill < 0.87 && Math.abs(aspect - 1) < 0.35;
+      const id = blobs.length;
+      for (const m of members) labels[m] = id;
+      const bboxArea = (maxX - minX + 1) * (maxY - minY + 1);
+      // corner-occupancy test for robust circle/rect discrimination
+      const cornerFill = computeCornerFill(labels, id, w, minX, maxX, minY, maxY);
       blobs.push({
-        x: sumX / area, y: sumY / area,
-        bw, bh, r: (bw + bh) / 4, area, round: isRound, fill,
+        id, members, area,
+        cx: sumX / area, cy: sumY / area,
+        minX, maxX, minY, maxY,
+        bw: maxX - minX + 1, bh: maxY - minY + 1,
+        fill: area / bboxArea,
+        cornerFill,
+      });
+    }
+  }
+  return { blobs, labels };
+}
+
+/* Fraction of the four bbox corner blocks filled for blob `id`.
+   Circle => low (~0.1-0.4), rectangle => high (~0.85-1.0). */
+function computeCornerFill(labels, id, w, minX, maxX, minY, maxY) {
+  const bw = maxX - minX + 1, bh = maxY - minY + 1;
+  const cs = Math.max(2, Math.round(Math.min(bw, bh) * 0.24));
+  const corners = [
+    [minX, minY], [maxX - cs + 1, minY],
+    [minX, maxY - cs + 1], [maxX - cs + 1, maxY - cs + 1],
+  ];
+  let filled = 0, total = 0;
+  for (const [cx0, cy0] of corners) {
+    for (let y = cy0; y < cy0 + cs; y++) {
+      for (let x = cx0; x < cx0 + cs; x++) {
+        total++;
+        if (labels[y * w + x] === id) filled++;
+      }
+    }
+  }
+  return total ? filled / total : 0;
+}
+
+/* ---------------- hole detection inside pads (rings) ---------------- */
+function detectNestedHoles(blobs, labels, lum, thr, w, h, brightIsFg) {
+  // For each pad blob, look for an inner region of the OPPOSITE polarity
+  // that is fully enclosed -> that's a drilled hole.
+  const holes = [];
+  const holeMask = new Uint8Array(w * h);
+  // opposite polarity = background brightness inside pad
+  for (let p = 0; p < w * h; p++) {
+    holeMask[p] = brightIsFg ? (lum[p] <= thr ? 1 : 0) : (lum[p] > thr ? 1 : 0);
+  }
+  // find components of holeMask that are small and inside a pad bbox
+  const { blobs: innerBlobs } = connectedComponents(holeMask, w, h, 4, w * h * 0.05);
+  for (const ib of innerBlobs) {
+    const aspect = ib.bw / ib.bh;
+    if (aspect > 1.6 || aspect < 0.62) continue;
+    if (ib.fill < 0.6 || ib.fill > 0.95) continue;
+    // check it is surrounded by a pad: sample ring around bbox
+    const pad = blobs.find(pad =>
+      ib.cx > pad.minX && ib.cx < pad.maxX &&
+      ib.cy > pad.minY && ib.cy < pad.maxY &&
+      pad.area > ib.area * 1.6);
+    if (pad) holes.push({ ...ib, padId: pad.id, r: (ib.bw + ib.bh) / 4 });
+  }
+  return holes;
+}
+
+/* ---------------- detectPads main ---------------- */
+function detectPads(canvas, opts = {}) {
+  const { lum, w, h } = computeLuminance(canvas);
+  const thr = otsuThreshold(lum);
+
+  let above = 0;
+  for (let p = 0; p < w * h; p++) if (lum[p] > thr) above++;
+  const brightIsFg = above < w * h * 0.5;
+
+  // binary mask
+  let mask = new Uint8Array(w * h);
+  for (let p = 0; p < w * h; p++) {
+    mask[p] = brightIsFg ? (lum[p] > thr ? 1 : 0) : (lum[p] <= thr ? 1 : 0);
+  }
+  // morphological open to kill specks; skip on tiny images
+  if (w > 60 && h > 60) mask = morphOpen(mask, w, h);
+
+  const minArea = Math.max(12, Math.round((w * h) / 400000));
+  const maxArea = w * h * 0.25;
+  const { blobs, labels } = connectedComponents(mask, w, h, minArea, maxArea);
+
+  const pxPerMm = doc && doc.pxPerMm ? doc.pxPerMm : null;
+
+  // classify shapes
+  const objects = [];
+  for (const b of blobs) {
+    const aspect = b.bw / b.bh;
+    if (aspect > 4 || aspect < 0.25) continue;   // traces / silkscreen lines
+    if (b.fill < 0.45) continue;                 // hollow rings / noise
+
+    // roundness: circle leaves bbox corners empty; rect fills them.
+    // cornerFill threshold 0.55 cleanly separates the two.
+    const isRound = Math.abs(aspect - 1) < 0.35 && b.cornerFill < 0.55;
+    const obj = {
+      ...b,
+      round: isRound,
+      kind: isRound ? "hole" : "pad",
+      x: b.cx, y: b.cy,
+      r: (b.bw + b.bh) / 4,
+    };
+    if (pxPerMm) {
+      obj.wMm = b.bw / pxPerMm;
+      obj.hMm = b.bh / pxPerMm;
+      obj.dMm = Math.min(obj.wMm, obj.hMm);
+    }
+    objects.push(obj);
+  }
+
+  // nested holes inside pads
+  const nested = detectNestedHoles(blobs, labels, lum, thr, w, h, brightIsFg);
+  for (const nh of nested) {
+    const pad = objects.find(o => o.id === nh.padId);
+    if (!pad) continue;
+    pad.hasHole = true;
+    pad.holeR = nh.r;
+    if (pxPerMm) pad.holeMm = (nh.r * 2) / pxPerMm;
+  }
+
+  // ---- min hole filter (in mm if scale known, else px) ----
+  const minHoleMm = opts.minHoleMm || 0;
+  let filtered = objects;
+  if (minHoleMm > 0) {
+    filtered = objects.filter(o => {
+      if (o.kind !== "hole") return true;
+      const dmm = o.dMm != null ? o.dMm : null;
+      if (dmm != null) return dmm >= minHoleMm * 0.85;
+      // no scale: keep all round objects (can't know mm)
+      return true;
+    });
+  }
+
+  // ---- library matching (needs scale) ----
+  let matchedCount = 0;
+  if (pxPerMm) {
+    for (const o of filtered) {
+      let best = null, bestErr = 0.18, bestKind = null;
+      if (o.round) {
+        for (const d of HOLE_LIB) {
+          const e = Math.abs(o.dMm - d) / d;
+          if (e < bestErr) { bestErr = e; best = d; bestKind = "hole"; }
+        }
+      } else {
+        for (const s of SMD_LIB) {
+          const e = Math.abs(o.dMm - s.padW) / s.padW;
+          if (e < bestErr) { bestErr = e; best = s; bestKind = "smd"; }
+        }
+      }
+      o.matched = !!best;
+      o.matchKind = bestKind;
+      o.match = best;
+      o.conf = best ? 1 - bestErr : 0;
+      o.label = best
+        ? (bestKind === "hole" ? `⌀${best}мм` : best.name)
+        : (o.round ? "отвір" : "пад");
+      if (best) matchedCount++;
+    }
+  } else {
+    filtered.forEach(o => {
+      o.matched = false;
+      o.label = o.round ? "отвір" : "пад";
+      o.conf = 0;
+    });
+  }
+
+  // ---- pitch + scale estimation ----
+  const scaleEst = estimateScale(filtered, pxPerMm);
+  // ---- component grouping ----
+  const components = groupComponents(filtered, bothPxPerMm(scaleEst, pxPerMm));
+
+  return {
+    objects: filtered,
+    components,
+    matched: matchedCount,
+    pxPerMm,
+    scaleEst,
+    thr,
+    brightIsFg,
+  };
+}
+
+function bothPxPerMm(scaleEst, pxPerMm) {
+  if (pxPerMm) return pxPerMm;
+  if (scaleEst && scaleEst.pxPerMm) return scaleEst.pxPerMm;
+  return null;
+}
+
+/* ---------------- scale estimation (multi-hypothesis consensus) -------- */
+function estimateScale(objects, knownPxPerMm) {
+  if (knownPxPerMm) {
+    return { pxPerMm: knownPxPerMm, source: "known", confidence: 1, candidates: [] };
+  }
+  const rounds = objects.filter(o => o.round && o.area > 20);
+  if (rounds.length < 3) return { pxPerMm: null, source: "none", confidence: 0, candidates: [] };
+
+  // Hypothesis A: nearest-neighbour pitch among similar-size circles
+  const dists = [];
+  for (let i = 0; i < rounds.length; i++) {
+    let min = Infinity;
+    for (let j = 0; j < rounds.length; j++) {
+      if (i === j) continue;
+      if (Math.abs(rounds[i].r - rounds[j].r) > Math.max(2, rounds[i].r * 0.3)) continue;
+      const d = Math.hypot(rounds[j].x - rounds[i].x, rounds[j].y - rounds[i].y);
+      if (d < min) min = d;
+    }
+    if (isFinite(min) && min > 2) dists.push(min);
+  }
+  const candidates = [];
+  if (dists.length >= 3) {
+    dists.sort((a, b) => a - b);
+    const median = dists[Math.floor(dists.length / 2)];   // px between neighbours
+    // Each standard pitch gives a px/мм hypothesis. Rank by how plausible
+    // the resulting export DPI is (common raster sources: 150-2400 DPI).
+    const pitchHyps = [];
+    for (const p of PITCH_LIB) {
+      const pxPerMm = median / p;
+      const dpi = pxPerMm * 25.4;
+      if (dpi < 60 || dpi > 3000) continue;
+      // preference: pitches that are extremely common in PCB work
+      const preference = ({ 2.54: 1.0, 1.27: 0.95, 1.0: 0.78, 2.0: 0.7, 0.65: 0.75,
+                            0.8: 0.7, 0.5: 0.7, 1.5: 0.7, 2.5: 0.65, 3.0: 0.6,
+                            5.08: 0.85, 0.4: 0.6 })[p] || 0.5;
+      pitchHyps.push({ pxPerMm, pitchMm: p, measuredPx: median, pref: preference, dpi });
+    }
+    pitchHyps.sort((a, b) => b.pref - a.pref);
+    if (pitchHyps.length) {
+      const h = pitchHyps[0];
+      candidates.push({
+        pxPerMm: h.pxPerMm, pitchMm: h.pitchMm, measuredPx: h.measuredPx,
+        source: `крок ${h.pitchMm} мм (${h.dpi.toFixed(0)} DPI)`,
+        confidence: 0.55 + 0.3 * h.pref,
+        kind: "pitch",
       });
     }
   }
 
-  // ---- identify candidate holes (round + small) ----
-  const holes = blobs.filter(b => b.round && b.r > 2);
-  const detections = [];
-  let matched = 0;
-
-  if (doc.pxPerMm) {
-    const pxPerMm = doc.pxPerMm;
-    blobs.forEach(b => {
-      const wMm = b.bw / pxPerMm, hMm = b.bh / pxPerMm;
-      const dMm = Math.min(wMm, hMm);
-      let best = null, bestErr = 0.18, bestKind = null;
-
-      if (b.round) {
-        // holes: compare diameter with standard drill diameters
-        HOLE_LIB.forEach(h => {
-          const err = Math.abs(dMm - h.d) / h.d;
-          if (err < bestErr) { bestErr = err; best = h; bestKind = "hole"; }
-        });
-      } else {
-        // rectangular pads: compare min side with SMD pad width
-        SMD_LIB.forEach(s => {
-          const err = Math.abs(dMm - s.padW) / s.padW;
-          if (err < bestErr) { bestErr = err; best = s; bestKind = "smd"; }
-        });
-      }
-      const d = {
-        ...b, wMm, hMm, dMm,
-        matched: !!best,
-        kind: bestKind,
-        label: best ? (bestKind === "hole" ? `⌀${best.d}мм` : best.name)
-                    : (b.round ? "отвір" : "пад"),
-        conf: best ? (1 - bestErr) : 0,
-      };
-      detections.push(d);
-      if (best) matched++;
-    });
-
-    // ---- pitch analysis: find equal-spaced grids of similar holes/pads ----
-    const pitchStats = analyzePitches(detections, pxPerMm);
-    detections.forEach(d => {
-      if (d.pitch) d.label = `${d.label} · ${d.pitch.toFixed(2)}мм`;
-    });
-  } else {
-    blobs.forEach(b => detections.push({
-      ...b, matched: false,
-      label: b.round ? "отвір" : "пад", conf: 0,
-    }));
-  }
-
-  return { detections, matched, pxPerMm: doc.pxPerMm, holes: holes.length };
-}
-
-/* Find dominant spacing between same-sized neighbours.
-   Returns { pitch: mm, confidence } — the most common nearest-neighbour distance
-   among round objects of similar size, snapped to standard pitches if close. */
-function analyzePitches(dets, pxPerMm) {
-  const round = dets.filter(d => d.round);
-  if (round.length < 4) return { pitch: null };
-  // nearest-neighbour distances
-  const dists = [];
-  for (let i = 0; i < round.length; i++) {
-    let min = Infinity;
-    for (let j = 0; j < round.length; j++) {
-      if (i === j) continue;
-      if (Math.abs(round[i].r - round[j].r) > Math.max(2, round[i].r * 0.35)) continue;
-      const d = Math.hypot(round[j].x - round[i].x, round[j].y - round[i].y) / pxPerMm;
-      if (d < min) min = d;
+  // Hypothesis B: median hole diameter -> standard drill
+  const dia = rounds.map(o => (o.bw + o.bh) / 2).sort((a, b) => a - b);
+  if (dia.length >= 3) {
+    const medDiaPx = dia[Math.floor(dia.length / 2)];
+    const diaHyps = [];
+    for (const dmm of HOLE_LIB) {
+      const pxPerMm = medDiaPx / dmm;
+      const dpi = pxPerMm * 25.4;
+      if (dpi < 60 || dpi > 3000) continue;
+      // preference: most typical drill sizes 0.8-1.2 mm
+      const preference = (dmm >= 0.8 && dmm <= 1.2) ? 0.9 : 0.55;
+      diaHyps.push({ pxPerMm, holeMm: dmm, dpi, pref: preference });
     }
-    if (isFinite(min)) dists.push(min);
+    diaHyps.sort((a, b) => b.pref - a.pref);
+    if (diaHyps.length) {
+      const h = diaHyps[0];
+      candidates.push({
+        pxPerMm: h.pxPerMm, holeMm: h.holeMm, measuredPx: medDiaPx,
+        source: `отвір ⌀${h.holeMm} мм (${h.dpi.toFixed(0)} DPI)`,
+        confidence: 0.35 + 0.2 * h.pref,
+        kind: "hole",
+      });
+    }
   }
-  if (dists.length < 3) return { pitch: null };
-  dists.sort((a, b) => a - b);
-  const median = dists[Math.floor(dists.length / 2)];
-  // snap to standard pitches
-  const STANDARD = [0.5, 0.65, 0.8, 1.0, 1.27, 1.5, 2.0, 2.5, 2.54, 3.0, 5.08];
-  let snap = median, bestE = 0.12;
-  STANDARD.forEach(s => {
-    const e = Math.abs(median - s) / s;
-    if (e < bestE) { bestE = e; snap = s; }
-  });
-  return { pitch: snap, snapped: snap !== median, median };
+
+  if (!candidates.length) return { pxPerMm: null, source: "none", confidence: 0, candidates: [] };
+
+  // consensus: if pitch & hole hypotheses agree within 12%, boost confidence
+  let best = candidates.reduce((a, b) => (b.confidence > a.confidence ? b : a));
+  for (const c of candidates) {
+    for (const d of candidates) {
+      if (c === d) continue;
+      const ratio = c.pxPerMm / d.pxPerMm;
+      if (ratio > 0.88 && ratio < 1.12) {
+        c.confidence = Math.min(0.95, c.confidence + 0.25);
+        if (c.confidence > best.confidence) best = c;
+      }
+    }
+  }
+  return {
+    pxPerMm: best.pxPerMm,
+    source: best.source,
+    confidence: best.confidence,
+    candidates,
+  };
 }
 
+
+/* ---------------- component grouping ---------------- */
+function groupComponents(objects, pxPerMm) {
+  // Universal grouping: cluster pads (round or rect) of similar size.
+  // Then split each size-cluster into separate packages by spatial gaps.
+  const usable = objects.filter(o => o.area > 15);
+  if (usable.length < 4) return [];
+
+  // 1. cluster by size (radius for round, min-side for rect)
+  const clusters = [];
+  for (const o of usable) {
+    const size = o.round ? o.r : Math.min(o.bw, o.bh) / 2;
+    let c = clusters.find(c => Math.abs(c.size - size) < Math.max(2, c.size * 0.3)
+                             && c.round === o.round);
+    if (c) { c.items.push(o); c.size = (c.size * (c.items.length - 1) + size) / c.items.length; }
+    else clusters.push({ size, round: o.round, items: [o] });
+  }
+
+  const components = [];
+  for (const c of clusters) {
+    if (c.items.length < 3) continue;
+    for (const pkg of splitIntoPackages(c.items, c.round)) {
+      const comp = describePackage(pkg, c.round, pxPerMm);
+      if (comp) components.push(comp);
+    }
+  }
+  return components;
+}
+
+/* Split a set of same-size pads into separate packages by spatial gaps.
+   Strategy: build rows (by y-projection), then split rows into groups by
+   x-gaps larger than ~2.2x the typical pitch. Pairs of rows with equal pin
+   counts and matching x positions form a 2-row IC (DIP/SOIC). */
+function splitIntoPackages(items, isRound) {
+  // rows by y
+  const sorted = [...items].sort((a, b) => a.y - b.y);
+  const rows = [];
+  for (const it of sorted) {
+    let r = rows.find(r => Math.abs(r.y - it.y) < Math.max(3, (it.round ? it.r : it.bh / 2) * 1.2));
+    if (r) { r.items.push(it); r.y = (r.y * (r.items.length - 1) + it.y) / r.items.length; }
+    else rows.push({ y: it.y, items: [it] });
+  }
+  // sort each row by x, split into packages by big x-gaps
+  const packages = [];
+  for (const row of rows) {
+    const its = row.items.sort((a, b) => a.x - b.x);
+    if (its.length === 1) continue; // single pad — ignore as package
+    const gaps = [];
+    for (let i = 1; i < its.length; i++) gaps.push(its[i].x - its[i - 1].x);
+    const pitch = medianOf(gaps);
+    const splitThresh = pitch * 2.2;
+    let cur = [its[0]];
+    for (let i = 1; i < its.length; i++) {
+      if (its[i].x - its[i - 1].x > splitThresh) {
+        if (cur.length >= 2) packages.push({ rows: [cur], y: row.y });
+        cur = [its[i]];
+      } else cur.push(its[i]);
+    }
+    if (cur.length >= 2) packages.push({ rows: [cur], y: row.y });
+  }
+  // merge single-row packages that are a DIP pair (similar x sets, ~constant y-gap)
+  const merged = [];
+  const used = new Set();
+  for (let i = 0; i < packages.length; i++) {
+    if (used.has(i)) continue;
+    const a = packages[i];
+    let partner = null;
+    for (let j = i + 1; j < packages.length; j++) {
+      if (used.has(j)) continue;
+      const b = packages[j];
+      const gap = Math.abs(b.y - a.y);
+      if (gap < 5) continue;
+      if (a.rows[0].length !== b.rows[0].length) continue;
+      // x-centres must roughly correspond
+      const ax = a.rows[0].map(o => o.x).sort((m, n) => m - n);
+      const bx = b.rows[0].map(o => o.x).sort((m, n) => m - n);
+      let ok = true, sumErr = 0;
+      for (let k = 0; k < ax.length; k++) sumErr += Math.abs(ax[k] - bx[k]);
+      if (sumErr / ax.length > currentTolerance(a)) ok = false;
+      if (ok) { partner = j; break; }
+    }
+    if (partner != null) {
+      used.add(partner);
+      merged.push({ rows: [a.rows[0], packages[partner].rows[0]], y: a.y, y2: packages[partner].y });
+    } else {
+      merged.push({ rows: [a.rows[0]], y: a.y });
+    }
+  }
+  return merged;
+}
+
+function currentTolerance(a) {
+  const s = medianOf(a.rows[0].map(o => o.round ? o.r : o.bw / 2));
+  return Math.max(4, s * 3);
+}
+
+function medianOf(arr) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((x, y) => x - y);
+  return s[Math.floor(s.length / 2)];
+}
+
+function describePackage(pkg, isRound, pxPerMm) {
+  const rows = pkg.rows;
+  const pins = rows.reduce((s, r) => s + r.length, 0);
+  const pitchPx = medianOf(rows.map(r => meanPitch(r.length > 1 ? r : [r[0]])));
+  const allItems = rows.flat();
+  if (rows.length === 2) {
+    const rowGapPx = Math.abs(pkg.y2 - pkg.y);
+    const comp = {
+      type: isRound ? "through-hole-IC" : "SMD-IC",
+      rows: 2, pins, pitchPx, rowGapPx, items: allItems,
+    };
+    if (pxPerMm) {
+      comp.pitchMm = pitchPx / pxPerMm;
+      comp.rowGapMm = rowGapPx / pxPerMm;
+      comp.footprint = matchFootprint(comp);
+    }
+    return comp;
+  }
+  // single row: passive array (e.g. header pins) or SMD passives side-by-side
+  if (rows.length === 1 && pins >= 2) {
+    const comp = { type: isRound ? "header-row" : "pad-row", rows: 1, pins, pitchPx, items: allItems };
+    if (pxPerMm) {
+      comp.pitchMm = pitchPx / pxPerMm;
+      comp.footprint = `ряд ${pins} × крок ${comp.pitchMm.toFixed(2)} мм`;
+    }
+    return comp;
+  }
+  return null;
+}
+
+
+function meanPitch(items) {
+  const xs = items.map(i => i.x).sort((a, b) => a - b);
+  const gaps = [];
+  for (let i = 1; i < xs.length; i++) gaps.push(xs[i] - xs[i - 1]);
+  if (!gaps.length) return 0;
+  gaps.sort((a, b) => a - b);
+  return gaps[Math.floor(gaps.length / 2)];
+}
+
+function matchFootprint(comp) {
+  const n = comp.pins;
+  for (const s of SMD_LIB) {
+    if (Math.abs(comp.pitchMm - s.pitchY) / s.pitchY < 0.12 &&
+        Math.abs(comp.rowGapMm - s.pitchX) / s.pitchX < 0.2) {
+      // DIP/SOIC families: derive the pin-count suffix from actual pins
+      const m = s.name.match(/^([A-Za-z]+)-(\d+)$/);
+      if (m && n) return `${m[1]}-${n}`;
+      return s.name;
+    }
+  }
+  return `крок ${comp.pitchMm.toFixed(2)} мм`;
+}
+
+/* ---------------- summary render ---------------- */
 function renderDetectionSummary(res) {
   const sum = document.getElementById("detSummary");
   const list = document.getElementById("detList");
   sum.style.display = "block";
-  const matched = res.detections.filter(d => d.matched).length;
-  const holeCount = res.detections.filter(d => d.round).length;
-  const padCount = res.detections.filter(d => !d.round).length;
 
-  let suggestion = "";
-  // Suggest scale from median hole diameter assuming standard drills
-  const holes = res.detections.filter(d => d.round && d.dMm);
-  if (holes.length >= 3) {
-    const sorted = holes.map(h => h.dMm).sort((a, b) => a - b);
-    const med = sorted[Math.floor(sorted.length / 2)];
-    const snap = HOLE_LIB.map(h => h.d).reduce((best, d) =>
-      Math.abs(d - med) < Math.abs(best - med) ? d : best, med);
-    suggestion = `<br>медіанний отвір: <b>${med.toFixed(2)} мм</b> → типовий <b>⌀${snap} мм</b>`;
+  const matched = res.objects.filter(d => d.matched).length;
+  const roundN = res.objects.filter(d => d.round).length;
+  const padN = res.objects.length - roundN;
+  const comps = res.components || [];
+
+  let scaleTxt = "невідомо";
+  if (res.pxPerMm) scaleTxt = `${(res.pxPerMm * 25.4).toFixed(0)} DPI · ${res.pxPerMm.toFixed(2)} px/мм`;
+  else if (res.scaleEst && res.scaleEst.pxPerMm) {
+    scaleTxt = `~${(res.scaleEst.pxPerMm * 25.4).toFixed(0)} DPI (${res.scaleEst.source}, ${(res.scaleEst.confidence * 100).toFixed(0)}%)`;
   }
 
-  sum.innerHTML = `Знайдено <b>${res.detections.length}</b> об'єктів:<br>
-    круглих (отвори/пади): <b>${holeCount}</b><br>
-    прямокутних (прямокутні пади): <b>${padCount}</b><br>
-    відповідають стандартам: <b>${matched}</b><br>
-    масштаб: <b>${res.pxPerMm ? (res.pxPerMm * 25.4).toFixed(0) + " DPI" : "невідомо"}</b>${suggestion}`;
+  let compHtml = "";
+  if (comps.length) {
+    const byType = {};
+    comps.forEach(c => {
+      const k = c.footprint || c.type;
+      byType[k] = (byType[k] || 0) + 1;
+    });
+    compHtml = "<br>Групи компонентів:<br>" +
+      Object.entries(byType).map(([k, n]) => `&nbsp;• ${k} × ${n}`).join("<br>");
+  }
 
+  sum.innerHTML = `Знайдено <b>${res.objects.length}</b> об'єктів:<br>
+    круглих отворів/падів: <b>${roundN}</b><br>
+    прямокутних падів: <b>${padN}</b><br>
+    відповідають бібліотеці: <b>${matched}</b><br>
+    масштаб: <b>${scaleTxt}</b>${compHtml}`;
+
+  // Build clickable list grouped by label
   list.innerHTML = "";
   const counts = {};
-  res.detections.forEach(d => { counts[d.label] = (counts[d.label] || 0) + 1; });
+  res.objects.forEach(d => { counts[d.label] = (counts[d.label] || 0) + 1; });
   Object.entries(counts).sort((a, b) => b[1] - a[1]).forEach(([label, n]) => {
     const el = document.createElement("div");
     el.className = "det-item";
     el.innerHTML = `<span class="tag">${label}</span><span class="conf">× ${n}</span>`;
+    el.style.cursor = "pointer";
+    el.onclick = () => { highlightObjects(res.objects.filter(o => o.label === label)); };
     list.appendChild(el);
   });
 }
 
+function highlightObjects(objs) {
+  highlighted = objs;
+  drawOverlay();
+}
+
 document.getElementById("detApply").onclick = () => {
-  if (!doc || !doc.pxPerMm) { toast("Спочатку встановіть масштаб"); return; }
-  const s = parseFloat(document.getElementById("scaleDistMm").value);
-  toast("Автоматичне вирівняння за розпізнаними елементами — експериментально");
+  if (!doc) return;
+  const res = window.__lastDetection;
+  if (!res) { toast("Спершу розпізнайте"); return; }
+
+  // 1. determine scale: prefer user-set pxPerMm, else estimate
+  let targetPxPerMm = doc.pxPerMm;
+  let sourceTxt = "поточний";
+  if (res.scaleEst && res.scaleEst.pxPerMm && res.scaleEst.confidence >= 0.4) {
+    if (!doc.pxPerMm) {
+      targetPxPerMm = res.scaleEst.pxPerMm;
+      sourceTxt = res.scaleEst.source;
+    }
+  }
+  if (!targetPxPerMm) { toast("Не вдалося визначити масштаб"); return; }
+
+  // 2. estimate deskew angle robustly.
+  //    Method: collect angles of edges between nearest-neighbour round pads,
+  //    fold into [-45,45], take the circular median. This reflects the true
+  //    pad-row orientation even when the grid is partially split into pieces.
+  const angleDeg = estimateDeskewAngle(res.objects);
+
+  // 3. apply scale: only resample if we already had a physical scale.
+  //    If pxPerMm was unknown, we just learn the physical size — no resampling.
+  const oldPx = doc.pxPerMm;
+  pushHistory();
+  if (oldPx && Math.abs(targetPxPerMm - oldPx) / oldPx > 0.005) {
+    const f = targetPxPerMm / oldPx;
+    if (isFinite(f) && f > 0) {
+      const out = document.createElement("canvas");
+      out.width = clamp(Math.round(doc.canvas.width * f), 1, 20000);
+      out.height = clamp(Math.round(doc.canvas.height * f), 1, 20000);
+      const o = out.getContext("2d");
+      o.imageSmoothingEnabled = true;
+      o.imageSmoothingQuality = "high";
+      o.drawImage(doc.canvas, 0, 0, out.width, out.height);
+      doc.canvas = out;
+    }
+  }
+  doc.pxPerMm = targetPxPerMm;
+
+  // 4. rotate to deskew if needed
+  if (Math.abs(angleDeg) > 0.3) {
+    doc.canvas = rotateCanvas(doc.canvas, -angleDeg);
+  }
+
+  fitToView();
+  render();
+  toast(`Застосовано: ${sourceTxt}${angleDeg ? `, поворот ${angleDeg.toFixed(2)}°` : ""}`);
 };
+
+/* Estimate board tilt from the orientation of nearest-neighbour edges
+   between similar round pads. Robust to partial grid segmentation. */
+function estimateDeskewAngle(objects) {
+  const rounds = (objects || []).filter(o => o.round && o.area > 12);
+  if (rounds.length < 4) return 0;
+
+  // gather angles of edges to nearest neighbours (within same size class)
+  const angles = [];
+  for (let i = 0; i < rounds.length; i++) {
+    // find up to 2 nearest neighbours of similar size
+    const cand = [];
+    for (let j = 0; j < rounds.length; j++) {
+      if (i === j) continue;
+      if (Math.abs(rounds[i].r - rounds[j].r) > Math.max(2, rounds[i].r * 0.3)) continue;
+      const dx = rounds[j].x - rounds[i].x, dy = rounds[j].y - rounds[i].y;
+      const d = Math.hypot(dx, dy);
+      if (d > 3) cand.push({ d, ang: Math.atan2(dy, dx) });
+    }
+    cand.sort((a, b) => a.d - b.d);
+    for (const c of cand.slice(0, 2)) {
+      // fold into [-45, 45] degrees (grid axes are near horizontal/vertical)
+      let deg = c.ang * 180 / Math.PI;
+      while (deg > 45) deg -= 90;
+      while (deg < -45) deg += 90;
+      angles.push(deg);
+    }
+  }
+  if (angles.length < 3) return 0;
+
+  // circular median via sorting (values are in [-45,45], no wraparound issue)
+  angles.sort((a, b) => a - b);
+  const med = angles[Math.floor(angles.length / 2)];
+  const mag = Math.abs(med);
+  // ignore trivial tilts
+  if (mag < 0.3) return 0;
+  // sanity: reject implausible large tilts (likely mis-paired edges)
+  if (mag > 30) return 0;
+  return med;
+}
+
+function rotateCanvas(src, deg) {
+  const rad = deg * Math.PI / 180;
+  const w = src.width, h = src.height;
+  const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+  const nw = Math.ceil(w * cos + h * sin), nh = Math.ceil(w * sin + h * cos);
+  const out = document.createElement("canvas");
+  out.width = nw; out.height = nh;
+  const o = out.getContext("2d");
+  // fill corners with the dominant background colour (avoids transparent
+  // or black wedges that would break detection / export)
+  o.fillStyle = dominantBackgroundColor(src);
+  o.fillRect(0, 0, nw, nh);
+  o.translate(nw / 2, nh / 2);
+  o.rotate(rad);
+  o.drawImage(src, -w / 2, -h / 2);
+  return out;
+}
+
+/* Estimate the canvas background colour from its border pixels. */
+function dominantBackgroundColor(src) {
+  const c = src.getContext("2d", { willReadFrequently: true });
+  const w = src.width, h = src.height;
+  const pts = [];
+  const step = Math.max(1, Math.floor((w + h) / 200));
+  for (let x = 0; x < w; x += step) { pts.push([x, 0], [x, h - 1]); }
+  for (let y = 0; y < h; y += step) { pts.push([0, y], [w - 1, y]); }
+  let r = 0, g = 0, b = 0, n = 0;
+  for (const [x, y] of pts) {
+    const d = c.getImageData(x, y, 1, 1).data;
+    if (d[3] < 128) continue;
+    r += d[0]; g += d[1]; b += d[2]; n++;
+  }
+  if (!n) return "#ffffff";
+  return `rgb(${Math.round(r/n)},${Math.round(g/n)},${Math.round(b/n)})`;
+}
 
 /* ============================================================
    EXPORT
