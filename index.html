@@ -1218,16 +1218,9 @@ function syncScaleFields() {
   const wEl = document.getElementById("scaleW");
   const hEl = document.getElementById("scaleH");
   if (!wEl || !hEl) return;
-  if (!doc) { wEl.value = ""; hEl.value = ""; return; }
-  if (!doc.pxPerMm) {
-    // no calibration yet: the fields stay empty rather than keeping a leftover
-    // number that would look like a real measurement
-    wEl.value = "";
-    hEl.value = "";
-    return;
-  }
-  wEl.value = fmtNum(doc.canvas.width / doc.pxPerMm);
-  hEl.value = fmtNum(doc.canvas.height / doc.pxPerMm);
+  const ppm = doc && doc.pxPerMm;
+  wEl.value = ppm ? fmtNum(doc.canvas.width / ppm) : "";
+  hEl.value = ppm ? fmtNum(doc.canvas.height / ppm) : "";
 }
 
 /** @deprecated use fmtUnitPx */
