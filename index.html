@@ -309,9 +309,9 @@
         <div class="field">
           <label>Округлити розмір рамки</label>
           <div class="row3">
-            <button class="btn round-btn" data-round="floor" title="Округлити вниз до 0.1 мм">↓ менше</button>
-            <button class="btn round-btn" data-round="round" title="Округлити до найближчих 0.1 мм">≈ авто</button>
-            <button class="btn round-btn" data-round="ceil" title="Округлити вгору до 0.1 мм">↑ більше</button>
+            <button class="btn round-btn" data-round="floor" title="Відкинути десяті (124.9 → 124)">↓ менше</button>
+            <button class="btn round-btn" data-round="round" title="Відкинути десяті (124.9 → 124)">≈ авто</button>
+            <button class="btn round-btn" data-round="ceil" title="Відкинути десяті, а при залишку додати 1 мм (124.9 → 125)">↑ більше</button>
           </div>
         </div>
         <button class="btn ok" id="cropApply">Застосувати обрізку</button>
@@ -351,13 +351,13 @@
           </div>
           <label class="chk"><input type="checkbox" id="scaleLock" checked> Зберігати пропорції</label>
           <div class="field">
-            <label>Округлити до 0.1 мм</label>
+            <label>Округлити до цілих мм</label>
             <div class="row3">
-              <button class="btn round-btn" id="scaleRoundFloor" data-round="floor" title="Округлити вниз до 0.1 мм">↓ менше</button>
-              <button class="btn round-btn" id="scaleRound" data-round="round" title="Округлити до найближчих 0.1 мм">≈ авто</button>
-              <button class="btn round-btn" id="scaleRoundCeil" data-round="ceil" title="Округлити вгору до 0.1 мм">↑ більше</button>
+              <button class="btn round-btn" id="scaleRoundFloor" data-round="floor" title="Відкинути десяті (124.9 → 124)">↓ менше</button>
+              <button class="btn round-btn" id="scaleRound" data-round="round" title="Відкинути десяті (124.9 → 124)">≈ авто</button>
+              <button class="btn round-btn" id="scaleRoundCeil" data-round="ceil" title="Відкинути десяті, а при залишку додати 1 мм (124.9 → 125)">↑ більше</button>
             </div>
-            <p class="hint" style="margin:6px 0 0">Одразу перемасштабовує зображення, змінюючи розмір лише на десяті мм.</p>
+            <p class="hint" style="margin:6px 0 0">Десяті мм зникають, цілі міліметри не зсуваються.</p>
           </div>
           <button class="btn primary" id="scaleWhApply">Застосувати</button>
         </div>
@@ -501,6 +501,7 @@ let unit = "mm";               // "mm" | "inch"
 
 // crop / perspective geometry (in *image* coordinates, not screen)
 let cropRect = null;           // {x,y,w,h} image coords
+let cropFrameMM = null;        // {w,h} when the frame was rounded to whole mm
 let perspQuad = null;          // [tl,tr,br,bl] image coords
 let perspActiveCorner = null;
 
@@ -790,7 +791,7 @@ function pxToUnit(px) {
 }
 
 // Rounds to a sane display precision without inventing or dropping digits.
-// Keeps tenths of a millimetre visible: 326.00 -> "326", 325.90 -> "325.9".
+// Whole millimetres are the working unit: 124.00 -> "124", 124.4 -> "124.4".
 function fmtNum(v) {
   const r = Math.round(v * 10) / 10;
   if (Number.isInteger(r)) return String(r);
@@ -800,7 +801,6 @@ function fmtUnitPx(px, ppm) {
   if (!ppm) return "—";
   const mm = px / ppm;
   const v = unit === "mm" ? mm : mm / 25.4;
-  // one decimal is the working precision: 168.5 mm, 0.1 tenths are meaningful
   const r = Math.round(v * 10) / 10;
   const s = Number.isInteger(r) ? String(r) : r.toFixed(1);
   return s + (unit === "mm" ? " мм" : "″");
@@ -865,9 +865,13 @@ function updateSizeLabel() {
   if (frameRow && frameVal) {
     frameRow.style.display = showFrame ? "flex" : "none";
     if (showFrame) {
-      frameVal.textContent = ppm
-        ? `${fmtUnitPx(cropRect.w, ppm)} × ${fmtUnitPx(cropRect.h, ppm)}`
-        : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`;
+      // a frame rounded to whole mm is reported in whole mm, not as the
+      // fractional value you get by dividing its pixel width back
+      frameVal.textContent = cropFrameMM
+        ? `${cropFrameMM.w} × ${cropFrameMM.h} мм`
+        : (ppm
+          ? `${fmtUnitPx(cropRect.w, ppm)} × ${fmtUnitPx(cropRect.h, ppm)}`
+          : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`);
     }
   }
   if (tagImg) tagImg.textContent = doc.pxPerMm ? "зобр." : "px";
@@ -875,9 +879,11 @@ function updateSizeLabel() {
 
   if (cropRect && tool === "crop" && document.querySelector('.pane[data-pane="crop"]').classList.contains("active")) {
     const el = document.getElementById("cropSize");
-    el.textContent = ppm
-      ? `${fmtUnitPx(cropRect.w, ppm)} × ${fmtUnitPx(cropRect.h, ppm)}`
-      : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`;
+    el.textContent = cropFrameMM
+      ? `${cropFrameMM.w} × ${cropFrameMM.h} мм`
+      : (ppm
+        ? `${fmtUnitPx(cropRect.w, ppm)} × ${fmtUnitPx(cropRect.h, ppm)}`
+        : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`);
   }
 
   // scale pane current
@@ -1041,6 +1047,7 @@ function switchTool(name) {
 function setCursor(c) { canvasTools.style.cursor = c; }
 
 function initCrop() {
+  cropFrameMM = null;
   cropRect = { x: 0, y: 0, w: doc.canvas.width, h: doc.canvas.height };
   updateSizeLabel();
 }
@@ -1292,14 +1299,31 @@ document.getElementById("cropApply").onclick = () => {
   const R = cropRect;
   if (R.w < 4 || R.h < 4) { toast("Рамка занадто мала"); return; }
   pushHistory();
-  // whole width/height so the result is exactly what the frame promised
-  const cw = Math.max(1, Math.round(R.w));
-  const ch = Math.max(1, Math.round(R.h));
+
+  // A frame rounded to whole mm must stay whole after the cut. With a
+  // fractional calibration the cut pixels never divide back to an integer, so
+  // rebuild the calibration on a whole px/mm first when it is close enough.
+  let ppm = doc.pxPerMm;
+  const wholeFrame = cropFrameMM && Math.abs(R.w - cropFrameMM.w * ppm) < 2
+    && Math.abs(R.h - cropFrameMM.h * ppm) < 2;
+  if (cropFrameMM && wholeFrame && Math.abs(ppm - Math.round(ppm)) > 1e-9) {
+    ppm = Math.max(1, Math.round(ppm));
+    // the frame follows into the new pixel space, keeping its real size
+    R.x = Math.round(R.x * ppm / doc.pxPerMm);
+    R.y = Math.round(R.y * ppm / doc.pxPerMm);
+  }
+
+  const targetW = cropFrameMM ? cropFrameMM.w : (R.w / ppm);
+  const targetH = cropFrameMM ? cropFrameMM.h : (R.h / ppm);
+  const cw = Math.max(1, Math.round(targetW * ppm));
+  const ch = Math.max(1, Math.round(targetH * ppm));
   const out = document.createElement("canvas");
   out.width = cw;
   out.height = ch;
-  out.getContext("2d").drawImage(doc.canvas, R.x, R.y, R.w, R.h, 0, 0, cw, ch);
+  const sx = R.x, sy = R.y, sw = R.w, sh = R.h;
+  out.getContext("2d").drawImage(doc.canvas, sx, sy, sw, sh, 0, 0, cw, ch);
   doc.canvas = out;
+  doc.pxPerMm = ppm;
   initCrop();
   fitToView();
   render();
@@ -1438,22 +1462,36 @@ document.getElementById("perspReset").onclick = () => {
    ROUNDING — floor / auto / ceil to 0.1 mm
    Applied immediately: the crop frame is resized, the image is rescaled.
    ============================================================ */
-// Rounding works in TENTHS of a millimetre (0.1 mm), not whole mm:
-// 124.09 -> 124.1, never 124. The scale never forces a bitmap rebuild;
-// only the pixel count is recalculated, so the physical size moves by
-// tenths of a millimetre instead of doubling the canvas.
-const ROUND_STEP = 0.1;
+// Rounding drops the tenths and keeps the WHOLE millimetre untouched.
+// The integer part is authoritative: 124.09 -> 124, 124.99 -> 124,
+// 124.00 -> 124. Only the fractional tail is discarded, so the integer
+// can never be pushed to a neighbour by the tenths.
+//   floor  -> drop the tail                    124.99 -> 124
+//   round  -> nearest integer, but never further than the neighbour
+//             that the whole part already implies 124.09 -> 124
+//   ceil   -> the integer part, or the next one only when a tail exists
+//             124.00 -> 124, 124.09 -> 125
+const ROUND_STEP = 1;          // whole millimetres
+const EPS = 1e-6;
 
 function roundValue(v, type) {
   if (!(v > 0)) return v;
-  // kill float noise (e.g. 124.09999999) before choosing a direction
-  const scaled = v / ROUND_STEP;
-  const eps = 1e-6;
+  const whole = Math.floor(v + EPS);        // integer part, tail ignored
+  const tail = v - whole;                   // 0 .. just under 1
+  const hasTail = tail > EPS;
+
   let n;
-  if (type === "floor") n = Math.floor(scaled + eps);
-  else if (type === "ceil") n = Math.ceil(scaled - eps);
-  else n = Math.round(scaled);
-  return Math.max(ROUND_STEP, +(n * ROUND_STEP).toFixed(4));
+  if (type === "floor") {
+    // drop the tenths completely
+    n = whole;
+  } else if (type === "ceil") {
+    // exact whole stays; anything above it climbs one step
+    n = hasTail ? whole + 1 : whole;
+  } else {
+    // "auto": keep the whole part unless the tail is a true half or more
+    n = tail >= 0.5 - EPS ? whole + 1 : whole;
+  }
+  return Math.max(1, n);
 }
 
 // Crop frame: snap its mm size to tenths immediately, keeping the
@@ -1463,32 +1501,21 @@ document.querySelectorAll('.pane[data-pane="crop"] .round-btn').forEach(btn => {
     if (!doc || !cropRect) return;
     if (!doc.pxPerMm) { toast("Спершу визначте масштаб", 3000); return; }
     const type = btn.dataset.round;
-    // Measure the frame in mm FIRST, while the calibration is still the one
-    // the user measured. Only then recalibrate to 10 px/mm so that one tenth
-    // of a millimetre is a whole number of pixels and the rounding step is
-    // actually visible.
-    const mmW0 = cropRect.w / doc.pxPerMm;
-    const mmH0 = cropRect.h / doc.pxPerMm;
+    const mmW = cropRect.w / doc.pxPerMm;
+    const mmH = cropRect.h / doc.pxPerMm;
 
-    const ratio = normalizePxPerMm();
-    if (ratio !== 1) {
-      cropRect.x = Math.round(cropRect.x * ratio);
-      cropRect.y = Math.round(cropRect.y * ratio);
-    }
-    cropRect.x = Math.round(cropRect.x);
-    cropRect.y = Math.round(cropRect.y);
-
-    const tW = roundValue(mmW0, type);
-    const tH = roundValue(mmH0, type);
-    if (!(tW >= ROUND_STEP) || !(tH >= ROUND_STEP)) { toast("Результат менший за 0.1 мм", 2500); return; }
-    // whole px so the applied crop is exactly tW x tH mm
-    const framePxW = Math.round(tW * doc.pxPerMm);
-    const framePxH = Math.round(tH * doc.pxPerMm);
-    cropRect.w = Math.min(framePxW, doc.canvas.width - cropRect.x);
-    cropRect.h = Math.min(framePxH, doc.canvas.height - cropRect.y);
+    const tW = roundValue(mmW, type);
+    const tH = roundValue(mmH, type);
+    if (!(tW >= 1) || !(tH >= 1)) { toast("Результат менший за 1 мм", 2500); return; }
+    // The frame is authored in whole millimetres. Keep the rounded mm as the
+    // declared size and only store the matching pixel count for drawing, so
+    // the panel never shows 169.07 derived back from 638.8 px.
+    cropFrameMM = { w: tW, h: tH };
+    cropRect.w = Math.min(Math.round(tW * doc.pxPerMm), doc.canvas.width - cropRect.x);
+    cropRect.h = Math.min(Math.round(tH * doc.pxPerMm), doc.canvas.height - cropRect.y);
     drawToolLayer();
     updateSizeLabel();
-    toast(`Рамка: ${fmtUnitPx(Math.round(cropRect.w), doc.pxPerMm)} × ${fmtUnitPx(Math.round(cropRect.h), doc.pxPerMm)}`, 2400);
+    toast(`Рамка: ${tW} × ${tH} мм`, 2400);
   };
 });
 
@@ -1509,10 +1536,10 @@ document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
     const typedW = parseFloat(wEl.value);
     const refW = typedW > 0 ? typedW : mmW;
 
-    const tW = Math.max(ROUND_STEP, roundValue(refW, type));
+    const tW = Math.max(1, roundValue(refW, type));
     const tH = lock
-      ? Math.max(ROUND_STEP, Math.round(tW * mmH / Math.max(mmW, 0.0001) * 10) / 10)
-      : Math.max(ROUND_STEP, roundValue(mmH, type));
+      ? Math.max(1, Math.round(tW * mmH / Math.max(mmW, 0.0001)))
+      : Math.max(1, roundValue(mmH, type));
 
     // show the targets before applying, so the user sees what happens
     wEl.value = fmtNum(tW);
@@ -1528,52 +1555,51 @@ document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
    SCALE
    ============================================================ */
 // Resize the bitmap so its physical size is exactly mmW x mmH.
-// The px/mm stays untouched, so the board keeps its real dimensions and
-// the canvas just gains or loses resolution.
-// Resize the bitmap so its physical size is exactly mmW x mmH.
 //
-// A fractional px/mm is what breaks exact sizes: at 3.7795 px/mm, 100 mm
-// needs 377.95 px, Math.round gives 378, and 378 / 3.7795 = 100.01 mm.
-// Every apply then drifts a little further (124.09 x 142.08 and so on).
-//
-// Fix: snap px/mm to a whole number of pixels per 0.1 mm (i.e. a multiple of
-// 10), so both whole mm and tenths of a mm land on exact pixel counts.
-const PX_PER_TENTH = 10;   // px/mm is always a multiple of this
-
-function normalizePxPerMm() {
-  if (!doc || !doc.pxPerMm) return 1;
-  const target = Math.max(PX_PER_TENTH, Math.round(doc.pxPerMm / PX_PER_TENTH) * PX_PER_TENTH);
-  if (Math.abs(target - doc.pxPerMm) < 1e-9) return 1;
-  const outW = clamp(Math.round(doc.canvas.width * target / doc.pxPerMm), 1, 20000);
-  const outH = clamp(Math.round(doc.canvas.height * target / doc.pxPerMm), 1, 20000);
-  const out = document.createElement("canvas");
-  out.width = outW; out.height = outH;
-  const o = out.getContext("2d");
-  o.imageSmoothingEnabled = true;
-  o.imageSmoothingQuality = "high";
-  o.drawImage(doc.canvas, 0, 0, outW, outH);
-  doc.canvas = out;
-  const ratio = target / doc.pxPerMm;
-  doc.pxPerMm = target;
-  return ratio;
-}
-
+// The scale is kept as-is (no rebuilding): the pixel count is computed from
+// the current px/mm, so the board keeps its real size and only the resolution
+// follows. Whole-mm targets stay exact because roundValue already returns
+// integers.
 function scaleToExactSize(mmW, mmH) {
   if (!doc || !(mmW > 0) || !(mmH > 0)) return;
   pushHistory();
 
-  // make 1 mm a whole number of pixels before measuring anything
-  normalizePxPerMm();
-  const ppm = doc.pxPerMm;
+  // Rounding works in whole millimetres. The calibration must therefore be a
+  // whole number of pixels per millimetre, otherwise 169 mm * 3.78 = 638.8 px
+  // reads back as 169.07 mm and the tenths come right back.
+  // Snap px/mm to an integer, but only when it barely matters visually, and
+  // rebuild the bitmap so the physical size is preserved.
+  let ppm = doc.pxPerMm;
+  const wholeW = Math.round(mmW), wholeH = Math.round(mmH);
+  const isWhole = Math.abs(mmW - wholeW) < 1e-9 && Math.abs(mmH - wholeH) < 1e-9;
+  if (isWhole && Math.abs(ppm - Math.round(ppm)) > 1e-9) {
+    const snapped = Math.max(1, Math.round(ppm));
+    // remap the source so the board keeps its real size at the new scale
+    const preW = clamp(Math.round(doc.canvas.width * snapped / ppm), 1, 20000);
+    const preH = clamp(Math.round(doc.canvas.height * snapped / ppm), 1, 20000);
+    const pre = document.createElement("canvas");
+    pre.width = preW; pre.height = preH;
+    const pc = pre.getContext("2d");
+    pc.imageSmoothingEnabled = true;
+    pc.imageSmoothingQuality = "high";
+    pc.drawImage(doc.canvas, 0, 0, preW, preH);
+    doc.canvas = pre;
+    ppm = snapped;
+  }
+
+  const outW = clamp(Math.round(mmW * ppm), 1, 20000);
+  const outH = clamp(Math.round(mmH * ppm), 1, 20000);
 
   const out = document.createElement("canvas");
-  out.width = clamp(Math.round(mmW * ppm), 1, 20000);
-  out.height = clamp(Math.round(mmH * ppm), 1, 20000);
+  out.width = outW;
+  out.height = outH;
   const o = out.getContext("2d");
   o.imageSmoothingEnabled = true;
   o.imageSmoothingQuality = "high";
   o.drawImage(doc.canvas, 0, 0, out.width, out.height);
   doc.canvas = out;
+  doc.pxPerMm = ppm;
+
   fitToView();
   render();
   syncScaleFields();
