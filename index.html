@@ -1543,8 +1543,13 @@ function edgeAngle(pts) {
 function mean(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; }
 
 document.getElementById("compAlignBtn").onclick = () => {
-  if (!doc || components.length === 0) return;
   const st = document.getElementById("compAlignStatus");
+  if (!doc) { st.className = "status err"; st.textContent = "Спочатку відкрийте файл"; return; }
+  if (components.length === 0) {
+    st.className = "status err";
+    st.textContent = "Додайте хоча б один компонент";
+    return;
+  }
 
   const ests = [];
   const angles = [];
@@ -1787,7 +1792,18 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "p" || e.key === "P") switchTool("perspective");
   if (e.key === "s" || e.key === "S") switchTool("scale");
   if (e.key === "d" || e.key === "D") switchTool("detect");
-  if (e.key === "Escape") { twoPoints = []; drawToolLayer(); }
+  if (e.key === "Escape") {
+    twoPoints = [];
+    if (pendingComponent) {
+      pendingComponent = null;
+      updateCompAddButton();
+      const st = document.getElementById("compStatus");
+      st.className = "status";
+      st.textContent = "Розміщення скасовано";
+      drawOverlay();
+    }
+    drawToolLayer();
+  }
 });
 
 /* resize */
