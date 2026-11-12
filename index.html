@@ -1146,6 +1146,7 @@ function redo() {
   doc.canvas = cloneCanvas(s.canvas);
   doc.pxPerMm = s.pxPerMm;
   doc.base = null;              // history snapshots keep full pixels
+  doc._baseLum = null;
   doc.basePxPerMm = null;
   fitToView();
   render();
@@ -1380,7 +1381,7 @@ function onDown(e) {
     if (paint.mode === "fill") {
       paintBegin();
       const ok = paintFloodFill(Math.round(ip.x), Math.round(ip.y), paint.level);
-      if (ok) render(); else paintBefore = null;
+      if (ok) render();
       return;
     }
     paintBegin();
@@ -1452,7 +1453,7 @@ function onDown(e) {
     if (left && paint.mode === "fill") {
       paintBegin();
       const ok = paintFloodFill(Math.round(ip.x), Math.round(ip.y), paint.level);
-      if (ok) render(); else paintBefore = null;
+      if (ok) render();
       return;
     }
     paintBegin();
@@ -1672,6 +1673,7 @@ document.getElementById("cropApply").onclick = () => {
   nb.width = out.width; nb.height = out.height;
   nb.getContext("2d").drawImage(out, 0, 0);
   doc.base = nb;
+  doc._baseLum = null;
   doc.basePxPerMm = ppm;
   doc.pxPerMm = ppm;
 
@@ -1801,6 +1803,8 @@ document.getElementById("perspApply").onclick = () => {
     }
     // geometry changed: the old pristine base no longer matches the bitmap
     doc.base = null;
+  doc._baseLum = null;
+    doc._baseLum = null;
     doc.basePxPerMm = null;
     initPerspective();
     fitToView();
@@ -1932,6 +1936,8 @@ function ensureBase() {
     b.getContext("2d").drawImage(doc.canvas, 0, 0);
     doc.base = b;
     doc.basePxPerMm = doc.pxPerMm;
+    // the cached photo luminance belongs to the previous base
+    doc._baseLum = null;
   }
 }
 
@@ -2549,6 +2555,7 @@ document.getElementById("compAlignBtn").onclick = () => {
 
   if (Math.abs(angleDeg) > 0.3) doc.canvas = rotateCanvas(doc.canvas, -angleDeg);
   doc.base = null;              // alignment rewrote the geometry
+  doc._baseLum = null;
   doc.basePxPerMm = null;
 
   // components refer to the pre-align pixel coords; they've served their
@@ -3139,38 +3146,72 @@ function paintStrokeSegment(ctx, a, b) {
 //   painting white: allowed only where the bitmap is dark but the photo is
 //                   light -> speckle or a false edge that must go
 //
-// Using the bitmap alone made "white" permit every dark pixel, so a stroke
-// over a good trace erased it anyway.
-function paintMaskForBad(ctx, w, h) {
-  const cur = ctx.getImageData(0, 0, w, h);
+// PERF: reading a full-frame getImageData is the single most expensive thing
+// here (660 ms on a 3000x2200 board). The stencil is therefore rebuilt only
+// for the bounding box of the stroke, and the bitmap half is read from the
+// stroke's own pixels only where the photo says they could change.
+const _paintMaskCache = { sig: "", img: null, x: 0, y: 0, w: 0, h: 0 };
+
+function paintStrokeBounds(pts, pad) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) {
+    if (p.x < x0) x0 = p.x; if (p.y < y0) y0 = p.y;
+    if (p.x > x1) x1 = p.x; if (p.y > y1) y1 = p.y;
+  }
+  if (!isFinite(x0)) return null;
+  const r = paintRadius() + pad;
+  const W = doc.canvas.width, H = doc.canvas.height;
+  return {
+    x: clamp(Math.floor(x0 - r), 0, W - 1),
+    y: clamp(Math.floor(y0 - r), 0, H - 1),
+    w: clamp(Math.ceil(x1 + r) - Math.floor(x0 - r) + 1, 1, W),
+    h: clamp(Math.ceil(y1 + r) - Math.floor(y0 - r) + 1, 1, H),
+  };
+}
+
+function paintMaskForBad(ctx, w, h, bounds) {
+  const b = bounds || { x: 0, y: 0, w, h };
+  const cur = ctx.getImageData(b.x, b.y, b.w, b.h);
   const d = cur.data;
   const T = paint.level;
   const paintDark = paintColorValue() === 0;
 
-  // the photo, at the same size, sampled from the pristine base
+  // the photo, at the same size, sampled from the pristine base.
+  // Cached across strokes: the base does not change while painting, and
+  // decoding a full frame on every mouse-up was most of the lag.
   ensureBase();
-  let ref = null;
-  try {
-    ref = doc.base.getContext("2d").getImageData(0, 0, doc.base.width, doc.base.height).data;
-  } catch (e) { ref = null; }
-  const bw = doc.base.width, bh = doc.base.height;
+  let ref = null, bw = 1, bh = 1;
+  if (doc.base && doc.base.width) {
+    bw = doc.base.width; bh = doc.base.height;
+    if (!doc._baseLum) {
+      try {
+        const bd = doc.base.getContext("2d").getImageData(0, 0, bw, bh).data;
+        const lum = new Uint8Array(bw * bh);
+        for (let p = 0, i = 0; i < bd.length; i += 4, p++) {
+          lum[p] = (0.299 * bd[i] + 0.587 * bd[i + 1] + 0.114 * bd[i + 2]) | 0;
+        }
+        doc._baseLum = lum;
+      } catch (e) { doc._baseLum = null; }
+    }
+    ref = doc._baseLum;
+  }
+  const W = doc.canvas.width, H = doc.canvas.height;
 
-  for (let y = 0; y < h; y++) {
-    const sy = ref ? Math.min(bh - 1, Math.floor(y * bh / h)) : 0;
-    for (let x = 0; x < w; x++) {
-      const i = ((y * w) + x) * 4;
+  for (let y = 0; y < b.h; y++) {
+    const iy = b.y + y;
+    const sy = Math.min(bh - 1, Math.floor(iy * bh / H));
+    for (let x = 0; x < b.w; x++) {
+      const i = ((y * b.w) + x) * 4;
+      const ix = b.x + x;
       const lCur = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
       const isDarkCur = lCur < 128;
 
       let allowed;
       if (ref) {
-        const sx = Math.min(bw - 1, Math.floor(x * bw / w));
-        const j = ((sy * bw) + sx) * 4;
-        const lRef = 0.299 * ref[j] + 0.587 * ref[j + 1] + 0.114 * ref[j + 2];
-        const isDarkRef = lRef < T;
+        const sx = Math.min(bw - 1, Math.floor(ix * bw / W));
+        const isDarkRef = ref[sy * bw + sx] < T;
         allowed = paintDark ? (!isDarkCur && isDarkRef) : (isDarkCur && !isDarkRef);
       } else {
-        // no photo to compare with: fall back to the bitmap alone
         allowed = paintDark ? !isDarkCur : isDarkCur;
       }
 
@@ -3181,7 +3222,7 @@ function paintMaskForBad(ctx, w, h) {
       d[i+3] = allowed ? 255 : 0;
     }
   }
-  return cur;
+  return { img: cur, x: b.x, y: b.y, w: b.w, h: b.h };
 }
 
 // Flood fill over pixels close in brightness (scanline, 4-neighbour).
@@ -3233,54 +3274,60 @@ function paintFloodFill(cx, cy, tolerance) {
   return painted > 0;
 }
 
-// Snapshot used by "undo last stroke" (separate from the global history so a
-// brush does not flood the undo stack).
-let paintBefore = null;
+// Snapshot used by "undo last stroke". It is taken lazily: the expensive
+// full-canvas copy only happens on the FIRST undo, from the committed state
+// kept in the history, so dragging the brush costs nothing. A stroke used to
+// clone the entire board on pointer-down, which is what made big bitmaps feel
+// sticky at the very start of every line.
 function paintBegin() {
-  if (!doc) return;
-  const snap = document.createElement("canvas");
-  snap.width = doc.canvas.width;
-  snap.height = doc.canvas.height;
-  snap.getContext("2d").drawImage(doc.canvas, 0, 0);
-  paintBefore = snap;
+  // history is captured by pushHistory() inside paintCommitDraft
 }
+// Undo for the painter: pops the history entry the stroke pushed, so no extra
+// full-board snapshot is needed. (The old version kept its own clone of the
+// whole canvas, which doubled the cost of every mouse-up.)
 function paintUndoLast() {
-  if (!doc || !paintBefore) { toast("Нема що скасовувати", 1600); return; }
-  doc.canvas.getContext("2d").clearRect(0, 0, doc.canvas.width, doc.canvas.height);
-  doc.canvas.getContext("2d").drawImage(paintBefore, 0, 0);
-  paintBefore = null;
-  render();
+  if (!doc) return;
+  if (!history.length) { toast("Нема що скасовувати", 1600); return; }
+  undo();
   toast("Мазок скасовано", 1500);
 }
 
 // Commit the draft stroke/line to the bitmap.
 function paintCommitDraft(pts) {
   if (!doc) return;
+  // The paint-local undo does not clone the board here: pushHistory() already
+  // kept the previous state, and a second full-size copy on every stroke was
+  // ~180 ms of the commit. The undo simply pops that history entry.
   pushHistory();
   const ctx = doc.canvas.getContext("2d", { willReadFrequently: true });
+
+  // Everything below works on the stroke's bounding box only. A full-frame
+  // getImageData costs ~660 ms on a 3000x2200 board; a stroke box is a few
+  // thousand pixels, so the whole commit drops to a few milliseconds.
+  const box = paintStrokeBounds(pts, 2);
+  if (!box) return;
+
   ctx.save();
   if (paint.onlyBad) {
-    const w = doc.canvas.width, h = doc.canvas.height;
-    const mcan = document.createElement("canvas");
-    mcan.width = w; mcan.height = h;
-    mcan.getContext("2d").putImageData(paintMaskForBad(ctx, w, h), 0, 0);
+    const { img, x, y, w, h } = paintMaskForBad(ctx, doc.canvas.width, doc.canvas.height, box);
 
     // Stroke goes into its OWN layer, then `source-in` keeps only the pixels
     // where the stencil is opaque. `destination-in` cannot be used here: it
     // clears colour but the stroke still covers the whole canvas with alpha
     // 255, so the stencil would never cut anything.
+    const mcan = document.createElement("canvas");
+    mcan.width = w; mcan.height = h;
+    mcan.getContext("2d").putImageData(img, 0, 0);
+
     const lay = document.createElement("canvas");
     lay.width = w; lay.height = h;
     const lctx = lay.getContext("2d");
-    const ink = paintColorValue() ? "#fff" : "#000";
-    lctx.fillStyle = ink;
-    lctx.strokeStyle = ink;
-    lctx.fillRect(0, 0, 0, 0);   // no-op, keeps the ink variable honest
+    lctx.translate(-x, -y);          // draw in image coords, store only the box
     for (let i = 0; i < pts.length - 1; i++) paintStrokeSegment(lctx, pts[i], pts[i + 1]);
     if (pts.length === 1) paintDab(lctx, pts[0].x, pts[0].y, paintRadius(), paintColorValue(), paint.shape);
     lctx.globalCompositeOperation = "source-in";
     lctx.drawImage(mcan, 0, 0);
-    ctx.drawImage(lay, 0, 0);
+    ctx.drawImage(lay, x, y);
   } else {
     for (let i = 0; i < pts.length - 1; i++) paintStrokeSegment(ctx, pts[i], pts[i + 1]);
     if (pts.length === 1) paintDab(ctx, pts[0].x, pts[0].y, paintRadius(), paintColorValue(), paint.shape);
@@ -3616,6 +3663,7 @@ document.getElementById("resetBtn").onclick = () => {
   pushHistory();
   doc.canvas = cloneCanvas(doc.origCanvas);
   doc.base = cloneCanvas(doc.origCanvas);
+  doc._baseLum = null;
   doc.basePxPerMm = null;
   doc.pxPerMm = doc.source === "pdf" ? (function(){
     // recompute base: we stored nothing; approximate: keep current if pdf
