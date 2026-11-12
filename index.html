@@ -1608,27 +1608,36 @@ document.getElementById("compAlignBtn").onclick = () => {
   const median = sorted[Math.floor(sorted.length / 2)];
   const spread = (sorted[sorted.length - 1] - sorted[0]) / median;
 
+  // Physical (1:1) working scale: 10 px/mm === 254 DPI. After alignment the
+  // image is resampled so that 1 mm on the board equals exactly 10 px, which
+  // makes the mm size correct AND keeps the pixel grid at a sane resolution.
+  const TARGET_PX_PER_MM = 10;
+
   const angleSorted = [...angles].sort((a, b) => a - b);
   let angleDeg = angleSorted[Math.floor(angleSorted.length / 2)];
   if (Math.abs(angleDeg) < 0.3) angleDeg = 0;
 
-  // apply scale (resample only if we already knew the scale)
   pushHistory();
-  const oldPx = doc.pxPerMm;
-  if (oldPx && Math.abs(median - oldPx) / oldPx > 0.005) {
-    const f = median / oldPx;
-    if (isFinite(f) && f > 0) {
+  const beforeW = doc.canvas.width, beforeH = doc.canvas.height;
+  const beforePx = doc.pxPerMm;
+
+  // 1. normalize to the physical working grid (works whether or not the
+  //    scale was already known — the measured px/mm is the source of truth)
+  const f = TARGET_PX_PER_MM / median;
+  if (isFinite(f) && f > 0) {
+    const outW = clamp(Math.round(doc.canvas.width * f), 1, 20000);
+    const outH = clamp(Math.round(doc.canvas.height * f), 1, 20000);
+    if (outW !== doc.canvas.width || outH !== doc.canvas.height) {
       const out = document.createElement("canvas");
-      out.width = clamp(Math.round(doc.canvas.width * f), 1, 20000);
-      out.height = clamp(Math.round(doc.canvas.height * f), 1, 20000);
+      out.width = outW; out.height = outH;
       const o = out.getContext("2d");
       o.imageSmoothingEnabled = true;
       o.imageSmoothingQuality = "high";
-      o.drawImage(doc.canvas, 0, 0, out.width, out.height);
+      o.drawImage(doc.canvas, 0, 0, outW, outH);
       doc.canvas = out;
     }
   }
-  doc.pxPerMm = median;
+  doc.pxPerMm = TARGET_PX_PER_MM;
 
   if (Math.abs(angleDeg) > 0.3) doc.canvas = rotateCanvas(doc.canvas, -angleDeg);
 
@@ -1640,11 +1649,22 @@ document.getElementById("compAlignBtn").onclick = () => {
   updateAlignButton();
   fitToView();
   render();
+
+  const afterW = doc.canvas.width, afterH = doc.canvas.height;
+  const mmW = afterW / TARGET_PX_PER_MM, mmH = afterH / TARGET_PX_PER_MM;
+  const sizeStr = `${mmW.toFixed(1)} × ${mmH.toFixed(1)} мм`;
+
   st.className = "status ok";
-  st.textContent = `Масштаб: ${median.toFixed(2)} px/мм · ${(median*25.4).toFixed(0)} DPI` +
-    (angleDeg ? ` · поворот ${angleDeg.toFixed(2)}°` : "") +
-    (spread > 0.1 ? ` · увага: розбіг ${(spread*100).toFixed(0)}%` : "");
-  toast("Вирівняно за компонентами");
+  st.innerHTML =
+    `Виміряно: <b>${median.toFixed(2)} px/мм</b> (${(median*25.4).toFixed(0)} DPI)<br>` +
+    `Розмір: <b>${sizeStr}</b> · нормалізовано до 1:1 ` +
+    `(${TARGET_PX_PER_MM} px/мм)` +
+    (angleDeg ? `<br>Поворот: ${(-angleDeg).toFixed(2)}°` : "") +
+    (beforePx == null ? `<br><span style="color:var(--muted)">Було: невідомий масштаб</span>` :
+      `<br><span style="color:var(--muted)">Було: ${beforeW}×${beforeH} px</span>`) +
+    `<br><span style="color:var(--muted)">Стало: ${afterW}×${afterH} px</span>` +
+    (spread > 0.1 ? `<br><span style="color:var(--danger)">Увага: розбіг ${(spread*100).toFixed(0)}% — перевірте кліки</span>` : "");
+  toast(`Розмір: ${sizeStr}`);
 };
 
 /* background colour sampler for rotation */
