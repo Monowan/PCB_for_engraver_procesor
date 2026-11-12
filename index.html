@@ -559,7 +559,11 @@ function render() {
   if (!doc) return;
 
   ctxImg.save();
-  ctxImg.imageSmoothingEnabled = view.scale < 1;
+  // Screen preview: always interpolate when shrinking, and use the best filter
+  // when enlarging. Nearest-neighbour on zoom-in would look blocky; smoothing
+  // everywhere keeps thin traces readable at any zoom.
+  ctxImg.imageSmoothingEnabled = true;
+  ctxImg.imageSmoothingQuality = "high";
   ctxImg.filter = "url(#docFilter)";
   ctxImg.drawImage(doc.canvas, view.x, view.y,
     doc.canvas.width * view.scale, doc.canvas.height * view.scale);
@@ -933,6 +937,8 @@ function redo() {
   if (history.length > HISTORY_MAX) history.shift();
   doc.canvas = cloneCanvas(s.canvas);
   doc.pxPerMm = s.pxPerMm;
+  doc.base = null;              // history snapshots keep full pixels
+  doc.basePxPerMm = null;
   fitToView();
   render();
   toast("Повторено");
@@ -1317,13 +1323,33 @@ document.getElementById("cropApply").onclick = () => {
   const targetH = cropFrameMM ? cropFrameMM.h : (R.h / ppm);
   const cw = Math.max(1, Math.round(targetW * ppm));
   const ch = Math.max(1, Math.round(targetH * ppm));
+
+  // Cut from the PRISTINE base, cropped to the same region, so the cut is as
+  // sharp as the original and later rescales keep full detail.
+  ensureBase();
+  const kx = doc.base.width / doc.canvas.width;
+  const ky = doc.base.height / doc.canvas.height;
+  const bsx = Math.round(R.x * kx), bsy = Math.round(R.y * ky);
+  const bsw = Math.max(1, Math.round(R.w * kx)), bsh = Math.max(1, Math.round(R.h * ky));
+
   const out = document.createElement("canvas");
   out.width = cw;
   out.height = ch;
-  const sx = R.x, sy = R.y, sw = R.w, sh = R.h;
-  out.getContext("2d").drawImage(doc.canvas, sx, sy, sw, sh, 0, 0, cw, ch);
+  const oc = out.getContext("2d");
+  oc.imageSmoothingEnabled = true;
+  oc.imageSmoothingQuality = "high";
+  oc.drawImage(doc.base, bsx, bsy, bsw, bsh, 0, 0, cw, ch);
+
   doc.canvas = out;
+  // the cut region becomes the new pristine base
+  const nb = document.createElement("canvas");
+  nb.width = out.width; nb.height = out.height;
+  nb.getContext("2d").drawImage(out, 0, 0);
+  doc.base = nb;
+  doc.basePxPerMm = ppm;
   doc.pxPerMm = ppm;
+
+
   initCrop();
   fitToView();
   render();
@@ -1447,6 +1473,9 @@ document.getElementById("perspApply").onclick = () => {
     if (doc.pxPerMm && wIn > 0 && hIn > 0) {
       doc.pxPerMm = outW / wIn; // rescale physical size to match requested mm
     }
+    // geometry changed: the old pristine base no longer matches the bitmap
+    doc.base = null;
+    doc.basePxPerMm = null;
     initPerspective();
     fitToView();
     render();
@@ -1561,21 +1590,70 @@ document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
 /* ============================================================
    SCALE
    ============================================================ */
-// Resize the bitmap so its physical size is exactly mmW x mmH.
-//
-// The scale is kept as-is (no rebuilding): the pixel count is computed from
-// the current px/mm, so the board keeps its real size and only the resolution
-// follows. Whole-mm targets stay exact because roundValue already returns
-// integers.
+// Resizing in-chain blurs the image: every drawImage of an already-resampled
+// canvas throws away detail, and after a few changes the board turns to mush.
+// Fix: keep the pristine high-resolution bitmap as `doc.base` and always
+// resample FROM IT, never from the previous resized result. The visible canvas
+// is a derived view; quality is preserved through any number of changes.
+const MAX_DIM = 20000;
+
+function ensureBase() {
+  if (!doc) return;
+  if (!doc.base || !doc.base.width) {
+    const b = document.createElement("canvas");
+    b.width = doc.canvas.width;
+    b.height = doc.canvas.height;
+    b.getContext("2d").drawImage(doc.canvas, 0, 0);
+    doc.base = b;
+    doc.basePxPerMm = doc.pxPerMm;
+  }
+}
+
+// Resample from the pristine base to the requested pixel dimensions.
+// Downscaling is done step by step so the result stays sharp instead of
+// aliasing, and upscaling uses the best available smoothing.
+function resampleFromBase(outW, outH) {
+  ensureBase();
+  const bw = doc.base.width, bh = doc.base.height;
+
+  // pure downscale more than 2x: halve repeatedly, then finish exactly
+  if (outW * 2 <= bw && outH * 2 <= bh) {
+    let cur = doc.base;
+    let cw = bw, ch = bh;
+    while (cw / 2 >= outW && ch / 2 >= outH) {
+      const step = document.createElement("canvas");
+      step.width = Math.max(1, Math.floor(cw / 2));
+      step.height = Math.max(1, Math.floor(ch / 2));
+      const sc = step.getContext("2d");
+      sc.imageSmoothingEnabled = true;
+      sc.imageSmoothingQuality = "high";
+      sc.drawImage(cur, 0, 0, step.width, step.height);
+      cur = step; cw = step.width; ch = step.height;
+    }
+    const out = document.createElement("canvas");
+    out.width = outW; out.height = outH;
+    const o = out.getContext("2d");
+    o.imageSmoothingEnabled = true;
+    o.imageSmoothingQuality = "high";
+    o.drawImage(cur, 0, 0, outW, outH);
+    return out;
+  }
+
+  const out = document.createElement("canvas");
+  out.width = outW; out.height = outH;
+  const o = out.getContext("2d");
+  o.imageSmoothingEnabled = true;
+  o.imageSmoothingQuality = "high";
+  o.drawImage(doc.base, 0, 0, outW, outH);
+  return out;
+}
+
+// Resize the bitmap so its physical size is exactly mmW x mmH, taking the
+// pixels from the pristine base every time so no detail is ever lost.
 function scaleToExactSize(mmW, mmH) {
   if (!doc || !(mmW > 0) || !(mmH > 0)) return;
   pushHistory();
 
-  // Rounding works in whole millimetres. The calibration must therefore be a
-  // whole number of pixels per millimetre, otherwise 169 mm * 3.78 = 638.8 px
-  // reads back as 169.07 mm and the tenths come right back.
-  // Snap px/mm to an integer, but only when it barely matters visually, and
-  // rebuild the bitmap so the physical size is preserved.
   // Rounding works in whole millimetres, so the calibration must allow a whole
   // number of pixels per millimetre. With 96 DPI (3.7795 px/mm) a 200 mm height
   // becomes 756 px and reads back as 200.02 mm. Snap px/mm to an integer and
@@ -1584,36 +1662,19 @@ function scaleToExactSize(mmW, mmH) {
   const wholeW = Math.abs(mmW - Math.round(mmW)) < 1e-9;
   const wholeH = Math.abs(mmH - Math.round(mmH)) < 1e-9;
   if ((wholeW || wholeH) && Math.abs(ppm - Math.round(ppm)) > 1e-9) {
-    const snapped = Math.max(1, Math.round(ppm));
-    const preW = clamp(Math.round(doc.canvas.width * snapped / ppm), 1, 20000);
-    const preH = clamp(Math.round(doc.canvas.height * snapped / ppm), 1, 20000);
-    const pre = document.createElement("canvas");
-    pre.width = preW; pre.height = preH;
-    const pc = pre.getContext("2d");
-    pc.imageSmoothingEnabled = true;
-    pc.imageSmoothingQuality = "high";
-    pc.drawImage(doc.canvas, 0, 0, preW, preH);
-    doc.canvas = pre;
-    ppm = snapped;
+    ppm = Math.max(1, Math.round(ppm));
   }
 
-  const outW = clamp(Math.round(mmW * ppm), 1, 20000);
-  const outH = clamp(Math.round(mmH * ppm), 1, 20000);
+  const outW = clamp(Math.round(mmW * ppm), 1, MAX_DIM);
+  const outH = clamp(Math.round(mmH * ppm), 1, MAX_DIM);
 
-  const out = document.createElement("canvas");
-  out.width = outW;
-  out.height = outH;
-  const o = out.getContext("2d");
-  o.imageSmoothingEnabled = true;
-  o.imageSmoothingQuality = "high";
-  o.drawImage(doc.canvas, 0, 0, out.width, out.height);
-  doc.canvas = out;
+  doc.canvas = resampleFromBase(outW, outH);
   doc.pxPerMm = ppm;
 
   fitToView();
   render();
   syncScaleFields();
-  return { w: out.width, h: out.height };
+  return { w: outW, h: outH };
 }
 
 // Human-readable "what the bitmap really is now" summary, taken from the
@@ -1628,16 +1689,9 @@ function actualSizeText() {
 function scaleCanvasTo(pxPerMm) {
   if (!doc || !(pxPerMm > 0) || !doc.pxPerMm) return;
   pushHistory();
-  const newW = Math.round(doc.canvas.width * pxPerMm / doc.pxPerMm);
-  const newH = Math.round(doc.canvas.height * pxPerMm / doc.pxPerMm);
-  const out = document.createElement("canvas");
-  out.width = clamp(newW, 1, 20000);
-  out.height = clamp(newH, 1, 20000);
-  const o = out.getContext("2d");
-  o.imageSmoothingEnabled = true;
-  o.imageSmoothingQuality = "high";
-  o.drawImage(doc.canvas, 0, 0, out.width, out.height);
-  doc.canvas = out;
+  const newW = clamp(Math.round(doc.canvas.width * pxPerMm / doc.pxPerMm), 1, MAX_DIM);
+  const newH = clamp(Math.round(doc.canvas.height * pxPerMm / doc.pxPerMm), 1, MAX_DIM);
+  doc.canvas = resampleFromBase(newW, newH);
   doc.pxPerMm = pxPerMm;
   fitToView();
   render();
@@ -2168,6 +2222,8 @@ document.getElementById("compAlignBtn").onclick = () => {
   doc.pxPerMm = TARGET_PX_PER_MM;
 
   if (Math.abs(angleDeg) > 0.3) doc.canvas = rotateCanvas(doc.canvas, -angleDeg);
+  doc.base = null;              // alignment rewrote the geometry
+  doc.basePxPerMm = null;
 
   // components refer to the pre-align pixel coords; they've served their
   // purpose, so clear them to avoid markers drifting on the transformed image
@@ -2349,6 +2405,8 @@ document.getElementById("resetBtn").onclick = () => {
   if (!doc) return;
   pushHistory();
   doc.canvas = cloneCanvas(doc.origCanvas);
+  doc.base = cloneCanvas(doc.origCanvas);
+  doc.basePxPerMm = null;
   doc.pxPerMm = doc.source === "pdf" ? (function(){
     // recompute base: we stored nothing; approximate: keep current if pdf
     return doc.pxPerMm;
