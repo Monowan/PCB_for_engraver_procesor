@@ -1429,7 +1429,7 @@ document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
     const tW = Math.max(1, roundValue(refW, type));
     const tH = lock
       ? Math.max(1, Math.round(tW * mmH / Math.max(mmW, 0.0001)))
-      : Math.max(1, roundValue(parseFloat(hEl.value) > 0 ? parseFloat(hEl.value) : mmH, type));
+      : Math.max(1, roundValue(mmH, type));
 
     // show the targets before applying, so the user sees what happens
     wEl.value = tW;
