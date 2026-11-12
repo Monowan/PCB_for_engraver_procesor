@@ -1,36 +1,178 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-    <meta charset="UTF-8">
-    <title>Vector PDF Master - Final</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-    <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #e0e0e0; font-family: sans-serif; }
-        #toolbar, #infoToolbar, #exportToolbar { position: fixed; z-index: 100; background: rgba(255, 255, 255, 0.95); padding: 12px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; gap: 10px; align-items: center; border: 1px solid #ccc; }
-        #toolbar { top: 15px; left: 15px; }
-        #infoToolbar { top: 15px; right: 15px; }
-        #exportToolbar { bottom: 15px; right: 15px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector PDF Master — PCB</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+<style>
+  :root {
+    --bg: #e8eaed;
+    --panel: #ffffff;
+    --panel-bg: #f7f8fa;
+    --border: #d3d6db;
+    --text: #1f2328;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --ok: #16a34a;
+    --warn: #f59e0b;
+    --danger: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px; -webkit-user-select: none; user-select: none;
+  }
 
-        canvas { position: absolute; top: 0; left: 0; }
-        #canvasImage { z-index: 1; }
-        #canvasOverlay { z-index: 2; pointer-events: none; }
-        #canvasCrop { z-index: 3; cursor: default; }
+  /* ---------- Layout ---------- */
+  #app { display: flex; width: 100%; height: 100%; }
 
-        button { padding: 6px 14px; cursor: pointer; border-radius: 4px; border: 1px solid #999; background: white; font-weight: bold; }
-        #confirmBtn { background: #4CAF50; color: white; border: none; }
-        #cancelBtn { background: #f44336; color: white; border: none; }
-        .export-btn { background: #FF9800; color: white; border: none; min-width: 60px; }
-        .round-tool { background: #2196F3; color: white; border: none; min-width: 35px; }
-        #invertBtn.active { background: #263238; color: white; }
+  #toolRail {
+    width: 64px; flex: 0 0 64px; background: var(--panel);
+    border-right: 1px solid var(--border); display: flex;
+    flex-direction: column; align-items: center; padding: 8px 0; gap: 4px;
+    z-index: 30;
+  }
+  .rail-btn {
+    width: 48px; height: 48px; border: none; border-radius: 8px;
+    background: transparent; cursor: pointer; display: flex;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; color: var(--muted); font-size: 9px; font-weight: 600;
+    transition: background .12s, color .12s; padding: 0;
+  }
+  .rail-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .rail-btn:hover { background: var(--panel-bg); color: var(--text); }
+  .rail-btn.active { background: var(--accent-soft); color: var(--accent); }
+  .rail-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .rail-sep { width: 32px; height: 1px; background: var(--border); margin: 4px 0; }
 
-        .slider-box { display: flex; flex-direction: column; align-items: center; border-left: 1px solid #ccc; padding-left: 10px; }
-        .slider-box label { font-size: 10px; font-weight: bold; margin-bottom: 2px; }
-    </style>
+  #stage {
+    flex: 1; position: relative; overflow: hidden;
+    background:
+      linear-gradient(45deg, #dfe2e6 25%, transparent 25%) 0 0/20px 20px,
+      linear-gradient(-45deg, #dfe2e6 25%, transparent 25%) 0 10px/20px 20px,
+      linear-gradient(45deg, transparent 75%, #dfe2e6 75%) 10px -10px/20px 20px,
+      linear-gradient(-45deg, transparent 75%, #dfe2e6 75%) -10px 0/20px 20px,
+      #eceef1;
+  }
+  #stage.drag-over::after {
+    content: "Відпустіть файл";
+    position: absolute; inset: 16px; border: 3px dashed var(--accent);
+    border-radius: 12px; background: rgba(37,99,235,.08);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 700; color: var(--accent); z-index: 50;
+  }
+
+  canvas { position: absolute; top: 0; left: 0; }
+  #canvasImage { z-index: 1; }
+  #canvasOverlay { z-index: 2; pointer-events: none; }
+  #canvasTools { z-index: 3; }
+
+  #sidePanel {
+    width: 292px; flex: 0 0 292px; background: var(--panel);
+    border-left: 1px solid var(--border); display: flex;
+    flex-direction: column; overflow: hidden; z-index: 30;
+  }
+  #panelHead {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  #panelHead .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  #panelBody { flex: 1; overflow-y: auto; padding: 14px 16px; }
+
+  .pane { display: none; }
+  .pane.active { display: block; }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 0 0 12px; }
+  .field { margin-bottom: 12px; }
+  .field > label { display: block; font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin-bottom: 4px; }
+  .field input[type=number], .field input[type=text] {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px; background: #fff; color: var(--text);
+    font-family: inherit;
+  }
+  .field input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .row2 { display: flex; gap: 8px; }
+  .row2 > * { flex: 1; min-width: 0; }
+
+  .btn {
+    width: 100%; padding: 9px; border-radius: 7px; border: 1px solid var(--border);
+    background: #fff; cursor: pointer; font-weight: 600; font-size: 13px;
+    font-family: inherit; color: var(--text); transition: filter .12s, background .12s;
+  }
+  .btn:hover { background: var(--panel-bg); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .btn.danger { background: #fff; border-color: var(--danger); color: var(--danger); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .btn + .btn { margin-top: 8px; }
+
+  .chk { display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    font-size: 13px; cursor: pointer; }
+  .chk input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .slider-row output { min-width: 38px; text-align: right; font-variant-numeric: tabular-nums;
+    font-weight: 700; }
+
+  .size-badge {
+    background: var(--panel-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+  }
+  .size-badge .big { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .size-badge .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; text-align: center; gap: 12px; color: var(--muted); padding: 24px;
+  }
+  .empty .big-icon { font-size: 40px; opacity: .5; }
+
+  /* Detection list */
+  .det-list { margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .det-item { padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 12px;
+    display: flex; justify-content: space-between; gap: 8px; }
+  .det-item:last-child { border-bottom: none; }
+  .det-item .tag { font-weight: 700; }
+  .det-item .conf { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .det-summary { margin-top: 10px; padding: 10px; border-radius: 8px;
+    background: var(--accent-soft); font-size: 12px; line-height: 1.5; }
+  .status { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 16px; }
+  .status.err { color: var(--danger); }
+  .status.ok { color: var(--ok); }
+
+  #dropHint {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; color: var(--muted);
+    pointer-events: none; z-index: 5;
+  }
+  #dropHint h1 { margin: 0; font-size: 22px; color: var(--text); }
+  #dropHint p { margin: 0; font-size: 14px; }
+
+  #toast {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #1f2328; color: #fff; padding: 10px 18px; border-radius: 8px;
+    font-size: 13px; opacity: 0; transition: opacity .2s, transform .2s;
+    pointer-events: none; z-index: 100; max-width: 80%;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 780px) {
+    #sidePanel { width: 240px; flex-basis: 240px; }
+    #toolRail { width: 52px; flex-basis: 52px; }
+    .rail-btn { width: 40px; height: 44px; }
+  }
+</style>
 </head>
 <body>
 
-<svg style="position: absolute; width: 0; height: 0;">
+<svg style="position: absolute; width: 0; height: 0; overflow: hidden;">
   <filter id="docFilter" color-interpolation-filters="sRGB">
     <feMorphology id="morphOp" operator="erode" radius="0"/>
     <feComponentTransfer id="invertTransfer">
@@ -39,297 +181,1476 @@
   </filter>
 </svg>
 
-<div id="toolbar">
-    <input type="file" id="fileInput" accept="image/*,.pdf">
-    <button id="invertBtn">◐ Інверсія</button>
-    <button id="cropBtn">Обрізати</button>
-    <div class="slider-box">
-        <label>ПРИРІСТ: <span id="dilateVal">0</span></label>
-        <input type="range" id="dilateSlider" min="0" max="10" step="0.1" value="0">
+<div id="app">
+  <!-- ============ LEFT TOOL RAIL ============ -->
+  <div id="toolRail">
+    <button class="rail-btn active" data-tool="move" title="Перегляд / переміщення (V)">
+      <svg viewBox="0 0 24 24"><path d="M4 4l7 17 2.5-6.5L20 12z"/></svg>
+      <span>Курсор</span>
+    </button>
+    <button class="rail-btn" data-tool="crop" title="Обрізка прямокутною рамкою (C)">
+      <svg viewBox="0 0 24 24"><path d="M6 2v16h16M2 6h16v16"/></svg>
+      <span>Обрізка</span>
+    </button>
+    <button class="rail-btn" data-tool="perspective" title="Перспектива — випрямлення за 4 кутами (P)">
+      <svg viewBox="0 0 24 24"><path d="M2 8l9-6 11 6v8l-11 6-9-6z"/><path d="M2 8h9v14"/></svg>
+      <span>Перспектива</span>
+    </button>
+    <button class="rail-btn" data-tool="scale" title="Масштаб за розмірами (S)">
+      <svg viewBox="0 0 24 24"><path d="M3 6h6M3 6v6M21 18h-6M21 18v-6"/><path d="M9 15L3 21M15 9l6-6"/></svg>
+      <span>Масштаб</span>
+    </button>
+    <button class="rail-btn" data-tool="detect" title="Розпізнавання компонентів (D)">
+      <svg viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.2"/><circle cx="17" cy="7" r="2.2"/><circle cx="12" cy="17" r="2.2"/><path d="M9 7h6M8 9l3 6M16 9l-3 6"/></svg>
+      <span>Розпізнав.</span>
+    </button>
+    <div class="rail-sep"></div>
+    <button class="rail-btn" id="undoBtn" title="Скасувати останню дію (Ctrl+Z)" disabled>
+      <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+      <span>Відміна</span>
+    </button>
+    <button class="rail-btn" id="resetBtn" title="Скинути до оригіналу">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      <span>Скинути</span>
+    </button>
+  </div>
+
+  <!-- ============ CANVAS STAGE ============ -->
+  <div id="stage">
+    <canvas id="canvasImage"></canvas>
+    <canvas id="canvasOverlay"></canvas>
+    <canvas id="canvasTools"></canvas>
+
+    <div id="dropHint">
+      <div style="font-size:48px;opacity:.35">📄</div>
+      <h1>Перетягніть PDF або зображення</h1>
+      <p>або натисніть кнопку «Відкрити файл» праворуч</p>
     </div>
-    <button class="round-tool align-btn" data-type="floor" style="display:none;">↓</button>
-    <button class="round-tool align-btn" data-type="round" style="display:none;">≈</button>
-    <button class="round-tool align-btn" data-type="ceil"  style="display:none;">↑</button>
-    <button id="confirmBtn" style="display:none;">Підтвердити</button>
-    <button id="cancelBtn" style="display:none;">Скасувати</button>
+
+    <div id="toast"></div>
+  </div>
+
+  <!-- ============ RIGHT SIDE PANEL ============ -->
+  <div id="sidePanel">
+    <div id="panelHead"><span class="dot"></span><span id="panelTitle">Файл</span></div>
+    <div id="panelBody">
+
+      <!-- ---- FILE / GLOBAL ---- -->
+      <div class="pane active" data-pane="file">
+        <button class="btn primary" id="openBtn">Відкрити файл</button>
+        <input type="file" id="fileInput" accept="image/*,.pdf" hidden>
+
+        <div class="size-badge" style="margin-top:14px;">
+          <div class="big" id="sizeDisplay">— × — мм</div>
+          <div class="sub" id="dpiDisplay">Масштаб: не визначено</div>
+        </div>
+
+        <div class="field">
+          <label>Приріст (дилатація), px</label>
+          <div class="slider-row">
+            <input type="range" id="dilateSlider" min="0" max="10" step="0.1" value="0">
+            <output id="dilateVal">0</output>
+          </div>
+        </div>
+        <label class="chk"><input type="checkbox" id="invertChk"> Інверсія (негатив)</label>
+
+        <div class="field" style="margin-top:16px;">
+          <label>Одиниці розміру</label>
+          <div class="row2">
+            <button class="btn" id="unitMm" style="background:var(--accent);color:#fff;border-color:var(--accent)">мм</button>
+            <button class="btn" id="unitInch">дюйм</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- CROP ---- -->
+      <div class="pane" data-pane="crop">
+        <p class="hint">Тягніть за кути або краї рамки. Потім натисніть «Застосувати».</p>
+        <div class="size-badge">
+          <div class="big" id="cropSize">— × —</div>
+          <div class="sub">розмір рамки</div>
+        </div>
+        <button class="btn ok" id="cropApply">Застосувати обрізку</button>
+        <button class="btn" id="cropReset">Скинути рамку</button>
+      </div>
+
+      <!-- ---- PERSPECTIVE ---- -->
+      <div class="pane" data-pane="perspective">
+        <p class="hint">Перетягніть 4 кути так, щоб вони лягли на кути плати на фото. Потім «Випрямити».</p>
+        <label class="chk"><input type="checkbox" id="perspAuto" checked> Автоматично визначати кути</label>
+        <div class="field">
+          <label>Вихідний розмір</label>
+          <div class="row2">
+            <div><input type="number" id="perspW" placeholder="W, мм" disabled></div>
+            <div><input type="number" id="perspH" placeholder="H, мм" disabled></div>
+          </div>
+          <p class="hint" style="margin:6px 0 0">Порожньо = взяти з розміру рамки.</p>
+        </div>
+        <button class="btn ok" id="perspApply">Випрямити</button>
+        <button class="btn" id="perspReset">Скинути кути</button>
+      </div>
+
+      <!-- ---- SCALE BY DIMENSIONS ---- -->
+      <div class="pane" data-pane="scale">
+        <p class="hint">Приведіть усе зображення до відомих розмірів у мм.</p>
+
+        <div class="field">
+          <label>Режим</label>
+          <label class="chk" style="margin:0 0 6px"><input type="radio" name="scaleMode" value="wh" checked> Ширина + висота</label>
+          <label class="chk" style="margin:0"><input type="radio" name="scaleMode" value="two"> Відстань між двома точками</label>
+        </div>
+
+        <div id="scaleWhPane">
+          <div class="row2">
+            <div class="field"><label>Ширина, мм</label><input type="number" id="scaleW" step="0.01" placeholder="100"></div>
+            <div class="field"><label>Висота, мм</label><input type="number" id="scaleH" step="0.01" placeholder="80"></div>
+          </div>
+          <label class="chk"><input type="checkbox" id="scaleLock" checked> Зберігати пропорції</label>
+          <button class="btn primary" id="scaleWhApply">Застосувати</button>
+        </div>
+
+        <div id="scaleTwoPane" style="display:none">
+          <p class="hint">Клікніть 2 точки на зображенні, потім введіть реальну відстань.</p>
+          <div class="field"><label>Реальна відстань, мм</label><input type="number" id="scaleDistMm" step="0.01" placeholder="10"></div>
+          <button class="btn primary" id="scaleTwoApply" disabled>Застосувати</button>
+          <button class="btn" id="scaleTwoReset">Скинути точки</button>
+        </div>
+
+        <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+          <label>Поточний масштаб</label>
+          <div class="size-badge" style="margin:0;">
+            <div class="big" id="scaleCurrent">—</div>
+            <div class="sub" id="scalePxPerMm">px / мм</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- DETECT ---- -->
+      <div class="pane" data-pane="detect">
+        <button class="btn primary" id="detectBtn">Розпізнати отвори / пади</button>
+        <div class="field" style="margin-top:12px;">
+          <label>Мін. діаметр отвору, мм</label>
+          <input type="number" id="detMinHole" step="0.1" value="0.6" min="0.1">
+        </div>
+
+        <div class="det-summary" id="detSummary" style="display:none"></div>
+        <div class="det-list" id="detList"></div>
+        <button class="btn ok" id="detApply" style="margin-top:12px;" disabled>Масштабувати за розпізнаним</button>
+        <p class="status" id="detStatus"></p>
+      </div>
+
+      <!-- ---- EXPORT ---- -->
+      <div class="pane" data-pane="export">
+        <p class="hint">Експорт у растрові формати для гравіювання.</p>
+        <div class="field">
+          <label>PNG — роздільність</label>
+          <select id="pngDpi" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;">
+            <option value="300">300 DPI (прев'ю)</option>
+            <option value="600" selected>600 DPI</option>
+            <option value="1000">1000 DPI (якісно)</option>
+            <option value="1200">1200 DPI (гравера)</option>
+          </select>
+        </div>
+        <button class="btn primary" id="exportPngBtn" style="margin-top:4px;">Експорт PNG</button>
+
+        <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+          <label>PDF — DPI растру</label>
+          <select id="pdfDpi" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;">
+            <option value="300">300 DPI</option>
+            <option value="600" selected>600 DPI</option>
+            <option value="1200">1200 DPI</option>
+          </select>
+        </div>
+        <button class="btn primary" id="exportPdfBtn" style="margin-top:4px;">Експорт PDF</button>
+
+        <p class="status" id="exportStatus"></p>
+      </div>
+
+    </div>
+  </div>
 </div>
-
-<div id="infoToolbar"><span id="sizeDisplay" style="font-weight:bold;">0 x 0 мм</span></div>
-
-<div id="exportToolbar">
-    <button id="exportPngBtn" class="export-btn">PNG</button>
-    <button id="exportPdfBtn" class="export-btn" style="background: #2196F3;">PDF</button>
-</div>
-
-<canvas id="canvasImage"></canvas>
-<canvas id="canvasOverlay"></canvas>
-<canvas id="canvasCrop"></canvas>
 
 <script>
-    const { PDFDocument, rgb } = PDFLib;
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+/* ============================================================
+   Vector PDF Master — PCB edition
+   Модель документа:
+     doc = {
+       canvas: HTMLCanvasElement,   // поточний стан (після crop/perspective/scale)
+       origCanvas: HTMLCanvasElement,// початковий, для «Скинути»
+       pxPerMm: number|null,        // фізичний масштаб; null = невідомий
+       source: "pdf"|"image"
+     }
+   ============================================================ */
 
-    const canvasImg = document.getElementById("canvasImage"), ctxImg = canvasImg.getContext("2d");
-    const canvasOvl = document.getElementById("canvasOverlay"), ctxOvl = canvasOvl.getContext("2d");
-    const canvasCrp = document.getElementById("canvasCrop"), ctxCrp = canvasCrp.getContext("2d");
-    const dilateSlider = document.getElementById("dilateSlider"), dilateVal = document.getElementById("dilateVal");
-    const invertBtn = document.getElementById("invertBtn");
+const { PDFDocument } = PDFLib;
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-    let dpr = window.devicePixelRatio || 1;
-    let pdfPage = null, originalImg = null, rawPdfBytes = null;
-    let pdfViewBox = { x: 0, y: 0, w: 0, h: 0 }, currentCoords = null, currentScale = 1;
-    let isInverted = false, cropMode = false, cropRect = null;
-    let dragging = false, dragPart = null, dragOffset = {x:0, y:0};
+/* ---------- Elements ---------- */
+const stage       = document.getElementById("stage");
+const canvasImg   = document.getElementById("canvasImage");
+const canvasOvl   = document.getElementById("canvasOverlay");
+const canvasTools = document.getElementById("canvasTools");
+const ctxImg   = canvasImg.getContext("2d");
+const ctxOvl   = canvasOvl.getContext("2d");
+const ctxTls   = canvasTools.getContext("2d");
+const dropHint = document.getElementById("dropHint");
+const toastEl  = document.getElementById("toast");
 
-    const cacheCanvas = document.createElement("canvas");
-    const cCtx = cacheCanvas.getContext("2d");
+const dilateSlider = document.getElementById("dilateSlider");
+const dilateVal    = document.getElementById("dilateVal");
+const invertChk    = document.getElementById("invertChk");
 
-    function updateFilterParams() {
-        dilateVal.innerText = dilateSlider.value;
-        document.getElementById("morphOp").setAttribute("radius", dilateSlider.value);
-        const funcs = document.querySelectorAll("#invertTransfer feFuncR, #invertTransfer feFuncG, #invertTransfer feFuncB");
-        funcs.forEach(f => {
-            f.setAttribute("type", isInverted ? "table" : "identity");
-            f.setAttribute("tableValues", isInverted ? "1 0" : "");
+/* ---------- State ---------- */
+let dpr = window.devicePixelRatio || 1;
+let doc = null;                // { canvas, origCanvas, pxPerMm, source }
+let view = { x: 0, y: 0, scale: 1 };   // pan + zoom
+let tool = "move";
+let isInverted = false;
+let unit = "mm";               // "mm" | "inch"
+
+// crop / perspective geometry (in *image* coordinates, not screen)
+let cropRect = null;           // {x,y,w,h} image coords
+let perspQuad = null;          // [tl,tr,br,bl] image coords
+let perspActiveCorner = null;
+
+// scale-two mode
+let twoPoints = [];            // image coords, max 2
+
+// detection results
+let detections = [];
+
+// undo history (canvas snapshots, capped)
+const history = [];
+const HISTORY_MAX = 12;
+
+/* ---------- Utils ---------- */
+function toast(msg, ms = 2200) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => toastEl.classList.remove("show"), ms);
+}
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// image <-> screen transforms
+function imgToScreen(ix, iy) {
+  return { x: view.x + ix * view.scale, y: view.y + iy * view.scale };
+}
+function screenToImg(sx, sy) {
+  return { x: (sx - view.x) / view.scale, y: (sy - view.y) / view.scale };
+}
+
+/* ---------- Resize canvases ---------- */
+function resizeCanvases() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  [canvasImg, canvasOvl, canvasTools].forEach(c => {
+    c.width = Math.round(w * dpr);
+    c.height = Math.round(h * dpr);
+    c.style.width = w + "px";
+    c.style.height = h + "px";
+  });
+  [ctxImg, ctxOvl, ctxTls].forEach(ctx => ctx.setTransform(dpr, 0, 0, dpr, 0, 0));
+}
+
+/* ---------- Fit-to-view ---------- */
+function fitToView() {
+  if (!doc) return;
+  const w = stage.clientWidth, h = stage.clientHeight;
+  const pad = 40;
+  const s = Math.min((w - pad * 2) / doc.canvas.width, (h - pad * 2) / doc.canvas.height);
+  view.scale = clamp(s, 0.02, 20);
+  view.x = (w - doc.canvas.width * view.scale) / 2;
+  view.y = (h - doc.canvas.height * view.scale) / 2;
+}
+
+/* ---------- Main render ---------- */
+function render() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  ctxImg.clearRect(0, 0, w, h);
+  if (!doc) return;
+
+  ctxImg.save();
+  ctxImg.imageSmoothingEnabled = view.scale < 1;
+  ctxImg.filter = "url(#docFilter)";
+  ctxImg.drawImage(doc.canvas, view.x, view.y,
+    doc.canvas.width * view.scale, doc.canvas.height * view.scale);
+  ctxImg.restore();
+
+  drawOverlay();
+  drawToolLayer();
+  updateSizeLabel();
+}
+
+/* dashed border of image; detection markers */
+function drawOverlay() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  ctxOvl.clearRect(0, 0, w, h);
+  if (!doc) return;
+  const p = imgToScreen(0, 0);
+  const ww = doc.canvas.width * view.scale;
+  const hh = doc.canvas.height * view.scale;
+  ctxOvl.strokeStyle = "rgba(37,99,235,.7)";
+  ctxOvl.lineWidth = 1;
+  ctxOvl.setLineDash([6, 4]);
+  ctxOvl.strokeRect(p.x, p.y, ww, hh);
+  ctxOvl.setLineDash([]);
+
+  // detection markers
+  if (tool === "detect" && detections.length) {
+    detections.forEach((d) => {
+      const c = imgToScreen(d.x, d.y);
+      const w = d.bw * view.scale, h = d.bh * view.scale;
+      ctxOvl.beginPath();
+      if (d.round) {
+        const r = Math.max(4, (d.bw / 2) * view.scale);
+        ctxOvl.arc(c.x, c.y, r, 0, Math.PI * 2);
+      } else {
+        ctxOvl.rect(c.x - w / 2, c.y - h / 2, Math.max(4, w), Math.max(4, h));
+      }
+      ctxOvl.strokeStyle = d.matched ? "#16a34a" : "#f59e0b";
+      ctxOvl.lineWidth = 2;
+      ctxOvl.stroke();
+      ctxOvl.fillStyle = d.matched ? "rgba(22,163,74,.15)" : "rgba(245,158,11,.15)";
+      ctxOvl.fill();
+    });
+  }
+}
+
+/* tool-specific geometry: crop frame, perspective quad, two-point marker */
+function drawToolLayer() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  ctxTls.clearRect(0, 0, w, h);
+  if (!doc) return;
+
+  if (tool === "crop" && cropRect) {
+    const a = imgToScreen(cropRect.x, cropRect.y);
+    const b = imgToScreen(cropRect.x + cropRect.w, cropRect.y + cropRect.h);
+    ctxTls.fillStyle = "rgba(0,0,0,.42)";
+    ctxTls.beginPath();
+    ctxTls.rect(0, 0, w, h);
+    ctxTls.rect(a.x, a.y, b.x - a.x, b.y - a.y);
+    ctxTls.fill("evenodd");
+
+    ctxTls.strokeStyle = "#2563eb";
+    ctxTls.lineWidth = 2;
+    ctxTls.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+
+    // corner handles
+    const pts = [
+      [a.x, a.y], [(a.x + b.x) / 2, a.y], [b.x, a.y],
+      [a.x, (a.y + b.y) / 2], [b.x, (a.y + b.y) / 2],
+      [a.x, b.y], [(a.x + b.x) / 2, b.y], [b.x, b.y],
+    ];
+    pts.forEach(([x, y]) => handleDot(x, y));
+  }
+
+  if (tool === "perspective" && perspQuad) {
+    const pts = perspQuad.map(q => imgToScreen(q.x, q.y));
+    ctxTls.beginPath();
+    pts.forEach((p, i) => i ? ctxTls.lineTo(p.x, p.y) : ctxTls.moveTo(p.x, p.y));
+    ctxTls.closePath();
+    ctxTls.fillStyle = "rgba(37,99,235,.10)";
+    ctxTls.fill();
+    ctxTls.strokeStyle = "#2563eb";
+    ctxTls.lineWidth = 2;
+    ctxTls.stroke();
+
+    // numbered corners
+    pts.forEach((p, i) => {
+      ctxTls.beginPath();
+      ctxTls.arc(p.x, p.y, 11, 0, Math.PI * 2);
+      ctxTls.fillStyle = (perspActiveCorner === i) ? "#2563eb" : "#ffffff";
+      ctxTls.fill();
+      ctxTls.strokeStyle = "#2563eb";
+      ctxTls.lineWidth = 2.5;
+      ctxTls.stroke();
+      ctxTls.fillStyle = (perspActiveCorner === i) ? "#fff" : "#2563eb";
+      ctxTls.font = "bold 12px sans-serif";
+      ctxTls.textAlign = "center";
+      ctxTls.textBaseline = "middle";
+      ctxTls.fillText(String(i + 1), p.x, p.y);
+    });
+  }
+
+  if (tool === "scale" && twoPoints.length) {
+    const pts = twoPoints.map(q => imgToScreen(q.x, q.y));
+    ctxTls.strokeStyle = "#dc2626";
+    ctxTls.lineWidth = 2;
+    ctxTls.setLineDash([5, 4]);
+    if (pts.length === 2) {
+      ctxTls.beginPath();
+      ctxTls.moveTo(pts[0].x, pts[0].y);
+      ctxTls.lineTo(pts[1].x, pts[1].y);
+      ctxTls.stroke();
+    }
+    ctxTls.setLineDash([]);
+    pts.forEach(p => {
+      ctxTls.beginPath();
+      ctxTls.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      ctxTls.fillStyle = "#dc2626";
+      ctxTls.fill();
+      ctxTls.strokeStyle = "#fff";
+      ctxTls.lineWidth = 2;
+      ctxTls.stroke();
+    });
+  }
+
+  function handleDot(x, y) {
+    ctxTls.beginPath();
+    ctxTls.arc(x, y, 5, 0, Math.PI * 2);
+    ctxTls.fillStyle = "#fff";
+    ctxTls.fill();
+    ctxTls.lineWidth = 2;
+    ctxTls.strokeStyle = "#2563eb";
+    ctxTls.stroke();
+  }
+}
+
+/* ---------- Size label ---------- */
+function unitLabel() { return unit === "mm" ? "мм" : "дюйм"; }
+function pxToUnit(px) {
+  if (!doc || !doc.pxPerMm) return null;
+  const mm = px / doc.pxPerMm;
+  return unit === "mm" ? mm : mm / 25.4;
+}
+function fmtUnit(px) {
+  const v = pxToUnit(px);
+  if (v == null) return "—";
+  return v.toFixed(2) + (unit === "mm" ? " мм" : "″");
+}
+
+function updateSizeLabel() {
+  const sizeEl = document.getElementById("sizeDisplay");
+  const dpiEl  = document.getElementById("dpiDisplay");
+  if (!doc) { sizeEl.textContent = "— × —"; dpiEl.textContent = "Масштаб: не визначено"; return; }
+
+  const w = doc.canvas.width, h = doc.canvas.height;
+  if (doc.pxPerMm) {
+    sizeEl.textContent = `${fmtUnit(w)} × ${fmtUnit(h)}`;
+    const dpi = doc.pxPerMm * 25.4;
+    dpiEl.textContent = `Масштаб: ${dpi.toFixed(0)} DPI · ${doc.pxPerMm.toFixed(1)} px/мм`;
+  } else {
+    sizeEl.textContent = `${w} × ${h} px`;
+    dpiEl.textContent = "Масштаб: не визначено";
+  }
+
+  // crop pane
+  if (cropRect) {
+    const el = document.getElementById("cropSize");
+    el.textContent = doc.pxPerMm
+      ? `${fmtUnit(cropRect.w)} × ${fmtUnit(cropRect.h)}`
+      : `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`;
+  }
+
+  // scale pane current
+  const scEl = document.getElementById("scaleCurrent");
+  const scPx = document.getElementById("scalePxPerMm");
+  if (doc.pxPerMm) {
+    scEl.textContent = `${fmtUnit(w)} × ${fmtUnit(h)}`;
+    scPx.textContent = `${doc.pxPerMm.toFixed(2)} px / мм`;
+  } else {
+    scEl.textContent = `${w} × ${h} px`;
+    scPx.textContent = "px / мм: невідомо";
+  }
+}
+
+/* ---------- History ---------- */
+function pushHistory() {
+  if (!doc) return;
+  const snap = document.createElement("canvas");
+  snap.width = doc.canvas.width;
+  snap.height = doc.canvas.height;
+  snap.getContext("2d").drawImage(doc.canvas, 0, 0);
+  history.push({ canvas: snap, pxPerMm: doc.pxPerMm });
+  if (history.length > HISTORY_MAX) history.shift();
+  document.getElementById("undoBtn").disabled = false;
+}
+function undo() {
+  if (!history.length || !doc) return;
+  const s = history.pop();
+  doc.canvas = s.canvas;
+  doc.pxPerMm = s.pxPerMm;
+  fitToView();
+  render();
+  toast("Скасовано");
+  document.getElementById("undoBtn").disabled = history.length === 0;
+}
+
+/* ---------- Filter params ---------- */
+function updateFilterParams() {
+  dilateVal.textContent = dilateSlider.value;
+  document.getElementById("morphOp").setAttribute("radius", dilateSlider.value);
+  const inverted = isInverted;
+  document.querySelectorAll("#invertTransfer feFuncR, #invertTransfer feFuncG, #invertTransfer feFuncB")
+    .forEach(f => {
+      f.setAttribute("type", inverted ? "table" : "identity");
+      f.setAttribute("tableValues", inverted ? "1 0" : "");
+    });
+}
+
+/* ============================================================
+   LOAD FILE
+   ============================================================ */
+async function loadFile(file) {
+  if (!file) return;
+  dropHint.style.display = "none";
+  try {
+    if (file.type === "application/pdf") {
+      const bytes = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+      const page = await pdf.getPage(1);
+      const vp0 = page.getViewport({ scale: 1 });
+      // 300 DPI render base
+      const renderScale = 300 / 72;
+      const vp = page.getViewport({ scale: renderScale });
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(vp.width);
+      cv.height = Math.round(vp.height);
+      await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+      // PDF: 1 pt = 1/72", so pxPerMm = renderScale * 72 / 25.4
+      doc = { canvas: cv, origCanvas: cloneCanvas(cv), pxPerMm: renderScale * 72 / 25.4, source: "pdf" };
+    } else {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await img.decode();
+      // prepare canvas at natural size
+      const cv = document.createElement("canvas");
+      cv.width = img.naturalWidth;
+      cv.height = img.naturalHeight;
+      cv.getContext("2d").drawImage(img, 0, 0);
+      // images: assume 96 DPI base (like original)
+      doc = { canvas: cv, origCanvas: cloneCanvas(cv), pxPerMm: 96 / 25.4, source: "image" };
+      URL.revokeObjectURL(img.src);
+    }
+    history.length = 0;
+    document.getElementById("undoBtn").disabled = true;
+    fitToView();
+    updateFilterParams();
+    render();
+    switchTool("crop"); // разом з цим підготуємо cropRect через initCrop()
+    toast("Файл завантажено");
+  } catch (err) {
+    console.error(err);
+    toast("Не вдалося відкрити файл: " + err.message, 4000);
+  }
+}
+function cloneCanvas(src) {
+  const c = document.createElement("canvas");
+  c.width = src.width; c.height = src.height;
+  c.getContext("2d").drawImage(src, 0, 0);
+  return c;
+}
+
+/* ============================================================
+   TOOL SWITCHING
+   ============================================================ */
+const toolButtons = [...document.querySelectorAll(".rail-btn[data-tool]")];
+toolButtons.forEach(b => b.onclick = () => switchTool(b.dataset.tool));
+
+function switchTool(name) {
+  if (!["move","crop","perspective","scale","detect"].includes(name)) return;
+  tool = name;
+  toolButtons.forEach(b => b.classList.toggle("active", b.dataset.tool === name));
+  document.querySelectorAll(".pane").forEach(p =>
+    p.classList.toggle("active", p.dataset.pane === name));
+
+  // init tool geometry
+  if (doc) {
+    if (name === "crop" && !cropRect) initCrop();
+    if (name === "perspective" && !perspQuad) initPerspective();
+    if (name !== "scale") twoPoints = [];
+  }
+  canvasTools.style.pointerEvents = (name === "move") ? "none" : "auto";
+  setCursor("default");
+  render();
+}
+
+function setCursor(c) { canvasTools.style.cursor = c; }
+
+function initCrop() {
+  cropRect = { x: 0, y: 0, w: doc.canvas.width, h: doc.canvas.height };
+  updateSizeLabel();
+}
+function initPerspective() {
+  const w = doc.canvas.width, h = doc.canvas.height;
+  const mx = w * 0.08, my = h * 0.08;
+  perspQuad = [
+    { x: mx,     y: my },
+    { x: w - mx, y: my },
+    { x: w - mx, y: h - my },
+    { x: mx,     y: h - my },
+  ];
+  // auto-corner detection if enabled
+  if (document.getElementById("perspAuto").checked) autoDetectCorners();
+}
+/* Auto corner detection: project-scan for darkest lines.
+   Simple but effective on photos of B/W boards: for each of 4 sides,
+   scan inward and find first strong dark row/column. */
+function autoDetectCorners() {
+  if (!doc) return;
+  const cv = doc.canvas;
+  const w = cv.width, h = cv.height;
+  const step = Math.max(1, Math.round(Math.max(w, h) / 600));
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.canvas.width = w; ctx.canvas.height = h;
+  ctx.drawImage(cv, 0, 0);
+  let data;
+  try { data = ctx.getImageData(0, 0, w, h).data; } catch { return; }
+
+  function lum(x, y) {
+    const i = ((y * w) + x) * 4;
+    return (data[i] + data[i+1] + data[i+2]) / 3;
+  }
+  // Threshold: mean - some
+  let sum = 0, n = 0;
+  for (let y = 0; y < h; y += step)
+    for (let x = 0; x < w; x += step) { sum += lum(x, y); n++; }
+  const mean = sum / n;
+  const thr = mean * (0.55); // dark if below 55% of mean
+
+  const lineDarkFrac = (pred) => {
+    let dark = 0, cnt = 0;
+    for (let x = 0; x < w; x += step) { if (lum(x, pred(x))) dark++; cnt++; }
+    return dark / cnt;
+  };
+  // top
+  let tY = 0;
+  for (let y = 0; y < h * 0.35; y += step) if (lineDarkFrac(() => y) > 0.6) { tY = y; break; }
+  // bottom
+  let bY = h - 1;
+  for (let y = h - 1; y > h * 0.65; y -= step) if (lineDarkFrac(() => y) > 0.6) { bY = y; break; }
+  // left
+  const colDarkFrac = (xPred) => {
+    let dark = 0, cnt = 0;
+    for (let y = 0; y < h; y += step) { if (lum(xPred(y), y)) dark++; cnt++; }
+    return dark / cnt;
+  };
+  let lX = 0;
+  for (let x = 0; x < w * 0.35; x += step) if (colDarkFrac(() => x) > 0.6) { lX = x; break; }
+  let rX = w - 1;
+  for (let x = w - 1; x > w * 0.65; x -= step) if (colDarkFrac(() => x) > 0.6) { rX = x; break; }
+
+  perspQuad = [
+    { x: lX, y: tY }, { x: rX, y: tY }, { x: rX, y: bY }, { x: lX, y: bY },
+  ];
+}
+
+/* ============================================================
+   POINTER INTERACTION (crop / perspective / scale / pan)
+   ============================================================ */
+let drag = null; // { part, start, orig }
+
+canvasTools.addEventListener("pointerdown", onDown);
+window.addEventListener("pointermove", onMove);
+window.addEventListener("pointerup", onUp);
+
+function getLocalPos(e) {
+  const r = canvasTools.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+function onDown(e) {
+  if (!doc) return;
+  const p = getLocalPos(e);
+  const ip = screenToImg(p.x, p.y);
+
+  if (tool === "crop" && cropRect) {
+    const part = cropHitPart(p, e.shiftKey ? 10 : 8);
+    if (part) { drag = { part }; canvasTools.setPointerCapture(e.pointerId); }
+    return;
+  }
+
+  if (tool === "perspective" && perspQuad) {
+    let best = -1, bestD = 18; // 18px screen radius
+    perspQuad.forEach((q, i) => {
+      const s = imgToScreen(q.x, q.y);
+      const d = Math.hypot(s.x - p.x, s.y - p.y);
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    if (best >= 0) {
+      perspActiveCorner = best;
+      drag = { part: "persp", idx: best };
+      canvasTools.setPointerCapture(e.pointerId);
+      drawToolLayer();
+      return;
+    }
+    // if clicked inside quad but not on corner: move whole quad? skip
+    return;
+  }
+
+  if (tool === "scale") {
+    const mode = document.querySelector('input[name="scaleMode"]:checked').value;
+    if (mode === "two") {
+      if (twoPoints.length >= 2) twoPoints = [];
+      twoPoints.push({ x: ip.x, y: ip.y });
+      updateScaleTwoButton();
+      drawToolLayer();
+    }
+    return;
+  }
+}
+
+function onMove(e) {
+  if (!doc) return;
+  const p = getLocalPos(e);
+  const ip = screenToImg(p.x, p.y);
+
+  // hover cursor feedback
+  if (!drag) {
+    if (tool === "crop" && cropRect) {
+      const part = cropHitPart(p, 10);
+      const cursors = {
+        t:"ns-resize", b:"ns-resize", l:"ew-resize", r:"ew-resize",
+        tl:"nwse-resize", br:"nwse-resize", tr:"nesw-resize", bl:"nesw-resize",
+        center:"move",
+      };
+      setCursor(cursors[part] || "default");
+    } else if (tool === "perspective") {
+      setCursor("crosshair");
+    } else if (tool === "scale") {
+      setCursor("crosshair");
+    }
+    return;
+  }
+
+  if (drag.part === "persp" && perspQuad) {
+    perspQuad[drag.idx] = { x: clamp(ip.x, 0, doc.canvas.width), y: clamp(ip.y, 0, doc.canvas.height) };
+    drawToolLayer();
+    return;
+  }
+
+  if (drag.part && cropRect) {
+    const { x: ix, y: iy } = ip;
+    const R = cropRect;
+    if (drag.part === "center") {
+      R.x = clamp(ix - dragCenterOff.x, 0, doc.canvas.width - R.w);
+      R.y = clamp(iy - dragCenterOff.y, 0, doc.canvas.height - R.h);
+    } else {
+      let x0 = R.x, y0 = R.y, x1 = R.x + R.w, y1 = R.y + R.h;
+      if (drag.part.includes("l")) x0 = clamp(ix, 0, x1 - 8);
+      if (drag.part.includes("r")) x1 = clamp(ix, x0 + 8, doc.canvas.width);
+      if (drag.part.includes("t")) y0 = clamp(iy, 0, y1 - 8);
+      if (drag.part.includes("b")) y1 = clamp(iy, y0 + 8, doc.canvas.height);
+      R.x = x0; R.y = y0; R.w = x1 - x0; R.h = y1 - y0;
+    }
+    drawToolLayer();
+    updateSizeLabel();
+  }
+}
+
+let dragCenterOff = { x: 0, y: 0 };
+
+function onUp() {
+  if (drag && drag.part === "center") dragCenterOff = { x: 0, y: 0 };
+  drag = null;
+}
+
+function cropHitPart(p, s) {
+  const R = cropRect;
+  const a = imgToScreen(R.x, R.y);
+  const b = imgToScreen(R.x + R.w, R.y + R.h);
+  const nearL = Math.abs(p.x - a.x) < s;
+  const nearR = Math.abs(p.x - b.x) < s;
+  const nearT = Math.abs(p.y - a.y) < s;
+  const nearB = Math.abs(p.y - b.y) < s;
+  const inX = p.x > a.x && p.x < b.x;
+  const inY = p.y > a.y && p.y < b.y;
+  if (nearL && nearT) return "tl";
+  if (nearR && nearT) return "tr";
+  if (nearL && nearB) return "bl";
+  if (nearR && nearB) return "br";
+  if (nearT && inX) return "t";
+  if (nearB && inX) return "b";
+  if (nearL && inY) return "l";
+  if (nearR && inY) return "r";
+  if (inX && inY) {
+    const ip = screenToImg(p.x, p.y);
+    dragCenterOff = { x: ip.x - R.x, y: ip.y - R.y };
+    return "center";
+  }
+  return null;
+}
+
+/* ---- pan / zoom with mouse wheel (always) ---- */
+stage.addEventListener("wheel", (e) => {
+  if (!doc) return;
+  e.preventDefault();
+  const r = canvasTools.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const before = screenToImg(mx, my);
+  const factor = Math.exp(-e.deltaY * 0.0015);
+  view.scale = clamp(view.scale * factor, 0.02, 40);
+  const after = screenToImg(mx, my);
+  view.x += (after.x - before.x) * view.scale;
+  view.y += (after.y - before.y) * view.scale;
+  render();
+}, { passive: false });
+
+/* middle-mouse / space-drag panning */
+let panStart = null;
+stage.addEventListener("pointerdown", (e) => {
+  if (e.button === 1 || (tool === "move" && e.button === 0)) {
+    panStart = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+  }
+});
+window.addEventListener("pointermove", (e) => {
+  if (panStart) {
+    view.x = panStart.vx + (e.clientX - panStart.x);
+    view.y = panStart.vy + (e.clientY - panStart.y);
+    render();
+  }
+});
+window.addEventListener("pointerup", () => { panStart = null; });
+
+/* ============================================================
+   CROP APPLY
+   ============================================================ */
+document.getElementById("cropApply").onclick = () => {
+  if (!doc || !cropRect) return;
+  const R = cropRect;
+  if (R.w < 4 || R.h < 4) { toast("Рамка занадто мала"); return; }
+  pushHistory();
+  const out = document.createElement("canvas");
+  out.width = Math.round(R.w);
+  out.height = Math.round(R.h);
+  out.getContext("2d").drawImage(doc.canvas, R.x, R.y, R.w, R.h, 0, 0, out.width, out.height);
+  doc.canvas = out;
+  initCrop();
+  fitToView();
+  render();
+  toast("Обрізано");
+};
+document.getElementById("cropReset").onclick = () => { if (doc) { initCrop(); drawToolLayer(); } };
+
+/* ============================================================
+   PERSPECTIVE WARP (homography)
+   ============================================================ */
+function solveHomography(src, dst) {
+  // src, dst: arrays of 4 {x,y}. Solve 8x8 for h (h33 = 1).
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const { x, y } = src[i], { x: X, y: Y } = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -X * x, -X * y]); b.push(X);
+    A.push([0, 0, 0, x, y, 1, -Y * x, -Y * y]); b.push(Y);
+  }
+  const h = gaussSolve(A, b);
+  return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1];
+}
+function gaussSolve(A, b) {
+  const n = b.length;
+  const M = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    [M[col], M[piv]] = [M[piv], M[col]];
+    if (Math.abs(M[col][col]) < 1e-12) continue;
+    const d = M[col][col];
+    for (let c = col; c <= n; c++) M[col][c] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = M[r][col];
+      if (!f) continue;
+      for (let c = col; c <= n; c++) M[r][c] -= f * M[col][c];
+    }
+  }
+  return M.map(row => row[n]);
+}
+
+function warpPerspective(srcCanvas, quad, outW, outH) {
+  // bilinear inverse mapping: for each output pixel, map back to source
+  const sw = srcCanvas.width, sh = srcCanvas.height;
+  const sctx = srcCanvas.getContext("2d");
+  const srcData = sctx.getImageData(0, 0, sw, sh).data;
+
+  const dstPts = [
+    { x: 0, y: 0 }, { x: outW - 1, y: 0 },
+    { x: outW - 1, y: outH - 1 }, { x: 0, y: outH - 1 },
+  ];
+  const H = solveHomography(dstPts, quad); // output -> source
+
+  const out = document.createElement("canvas");
+  out.width = outW; out.height = outH;
+  const octx = out.getContext("2d");
+  const outImg = octx.createImageData(outW, outH);
+  const od = outImg.data;
+
+  for (let yy = 0; yy < outH; yy++) {
+    for (let xx = 0; xx < outW; xx++) {
+      const w = H[6] * xx + H[7] * yy + H[8];
+      const sx = (H[0] * xx + H[1] * yy + H[2]) / w;
+      const sy = (H[3] * xx + H[4] * yy + H[5]) / w;
+      const di = (yy * outW + xx) * 4;
+      if (sx < 0 || sy < 0 || sx >= sw - 1 || sy >= sh - 1) {
+        od[di + 3] = 0; continue;
+      }
+      // bilinear
+      const x0 = Math.floor(sx), y0 = Math.floor(sy);
+      const fx = sx - x0, fy = sy - y0;
+      const i00 = (y0 * sw + x0) * 4;
+      const i10 = i00 + 4;
+      const i01 = i00 + sw * 4;
+      const i11 = i01 + 4;
+      for (let c = 0; c < 3; c++) {
+        const v =
+          srcData[i00 + c] * (1 - fx) * (1 - fy) +
+          srcData[i10 + c] * fx * (1 - fy) +
+          srcData[i01 + c] * (1 - fx) * fy +
+          srcData[i11 + c] * fx * fy;
+        od[di + c] = v;
+      }
+      od[di + 3] = 255;
+    }
+  }
+  octx.putImageData(outImg, 0, 0);
+  return out;
+}
+
+document.getElementById("perspApply").onclick = () => {
+  if (!doc || !perspQuad) return;
+
+  // output size: from mm fields if valid, else from quad bbox
+  const wIn = parseFloat(document.getElementById("perspW").value);
+  const hIn = parseFloat(document.getElementById("perspH").value);
+  let outW, outH;
+  if (doc.pxPerMm && wIn > 0 && hIn > 0) {
+    outW = Math.round(wIn * doc.pxPerMm);
+    outH = Math.round(hIn * doc.pxPerMm);
+  } else {
+    const q = perspQuad;
+    outW = Math.round(Math.max(
+      Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y),
+      Math.hypot(q[2].x - q[3].x, q[2].y - q[3].y)
+    ));
+    outH = Math.round(Math.max(
+      Math.hypot(q[3].x - q[0].x, q[3].y - q[0].y),
+      Math.hypot(q[2].x - q[1].x, q[2].y - q[1].y)
+    ));
+  }
+  outW = clamp(outW, 20, 8000);
+  outH = clamp(outH, 20, 8000);
+
+  pushHistory();
+  toast("Випрямлення…");
+  setTimeout(() => {
+    const warped = warpPerspective(doc.canvas, perspQuad, outW, outH);
+    doc.canvas = warped;
+    if (doc.pxPerMm && wIn > 0 && hIn > 0) {
+      doc.pxPerMm = outW / wIn; // rescale physical size to match requested mm
+    }
+    initPerspective();
+    fitToView();
+    render();
+    toast("Перспективу випрямлено");
+  }, 30);
+};
+document.getElementById("perspReset").onclick = () => {
+  if (doc) { perspQuad = null; initPerspective(); drawToolLayer(); }
+};
+
+/* ============================================================
+   SCALE
+   ============================================================ */
+function scaleCanvasTo(pxPerMm) {
+  if (!doc || !(pxPerMm > 0)) return;
+  pushHistory();
+  const newW = Math.round(doc.canvas.width * pxPerMm / doc.pxPerMm);
+  const newH = Math.round(doc.canvas.height * pxPerMm / doc.pxPerMm);
+  const out = document.createElement("canvas");
+  out.width = clamp(newW, 1, 20000);
+  out.height = clamp(newH, 1, 20000);
+  const o = out.getContext("2d");
+  o.imageSmoothingEnabled = true;
+  o.imageSmoothingQuality = "high";
+  o.drawImage(doc.canvas, 0, 0, out.width, out.height);
+  doc.canvas = out;
+  doc.pxPerMm = pxPerMm;
+  fitToView();
+  render();
+}
+
+document.getElementById("scaleWhApply").onclick = () => {
+  if (!doc) return;
+  const wIn = parseFloat(document.getElementById("scaleW").value);
+  const hIn = parseFloat(document.getElementById("scaleH").value);
+  const lock = document.getElementById("scaleLock").checked;
+  const w = doc.canvas.width, h = doc.canvas.height;
+
+  if (lock) {
+    if (wIn > 0) scaleCanvasTo(wIn / (w / doc.pxPerMm) * doc.pxPerMm);
+    else if (hIn > 0) scaleCanvasTo(hIn / (h / doc.pxPerMm) * doc.pxPerMm);
+    else { toast("Введіть хоча б один розмір"); return; }
+  } else {
+    if (!(wIn > 0) || !(hIn > 0)) { toast("Введіть обидва розміри"); return; }
+    pushHistory();
+    const out = document.createElement("canvas");
+    out.width = clamp(Math.round(wIn * doc.pxPerMm), 1, 20000);
+    out.height = clamp(Math.round(hIn * doc.pxPerMm), 1, 20000);
+    const o = out.getContext("2d");
+    o.imageSmoothingEnabled = true;
+    o.imageSmoothingQuality = "high";
+    o.drawImage(doc.canvas, 0, 0, out.width, out.height);
+    doc.canvas = out;
+    fitToView();
+    render();
+  }
+  toast("Масштаб застосовано");
+};
+
+document.getElementById("scaleTwoApply").onclick = () => {
+  if (!doc || twoPoints.length !== 2) return;
+  const distMm = parseFloat(document.getElementById("scaleDistMm").value);
+  if (!(distMm > 0)) { toast("Введіть реальну відстань"); return; }
+  const [a, b] = twoPoints;
+  const distPx = Math.hypot(b.x - a.x, b.y - a.y);
+  if (distPx < 2) { toast("Точки занадто близько"); return; }
+  const pxPerMm = distPx / distMm;
+  pushHistory();
+  doc.pxPerMm = pxPerMm;
+  twoPoints = [];
+  updateScaleTwoButton();
+  drawToolLayer();
+  render();
+  toast(`Масштаб встановлено: ${pxPerMm.toFixed(2)} px/мм`);
+};
+document.getElementById("scaleTwoReset").onclick = () => { twoPoints = []; updateScaleTwoButton(); drawToolLayer(); };
+function updateScaleTwoButton() {
+  document.getElementById("scaleTwoApply").disabled = twoPoints.length !== 2;
+}
+
+document.querySelectorAll('input[name="scaleMode"]').forEach(r => r.onchange = () => {
+  const mode = document.querySelector('input[name="scaleMode"]:checked').value;
+  document.getElementById("scaleWhPane").style.display = mode === "wh" ? "block" : "none";
+  document.getElementById("scaleTwoPane").style.display = mode === "two" ? "block" : "none";
+  twoPoints = [];
+  updateScaleTwoButton();
+  drawToolLayer();
+});
+
+document.getElementById("scaleLock").onchange = (e) => {
+  // lock: preview height in mm based on width, keep both editable
+  const wIn = parseFloat(document.getElementById("scaleW").value);
+  if (e.target.checked && doc && doc.pxPerMm && wIn > 0) {
+    const aspect = doc.canvas.height / doc.canvas.width;
+    document.getElementById("scaleH").value = (wIn * aspect).toFixed(2);
+  }
+};
+document.getElementById("scaleW").addEventListener("input", () => {
+  if (!document.getElementById("scaleLock").checked) return;
+  if (!doc || !doc.pxPerMm) return;
+  const wIn = parseFloat(document.getElementById("scaleW").value);
+  if (!(wIn > 0)) return;
+  const aspect = doc.canvas.height / doc.canvas.width;
+  document.getElementById("scaleH").value = (wIn * aspect).toFixed(2);
+});
+
+/* ============================================================
+   COMPONENT DETECTION (MVP)
+   ============================================================ */
+const SMD_LIB = [
+  { name: "0402", padW: 0.5, pitchX: 1.0, pitchY: 0.55 },
+  { name: "0603", padW: 0.8, pitchX: 1.6, pitchY: 0.95 },
+  { name: "0805", padW: 1.0, pitchX: 1.9, pitchY: 1.4 },
+  { name: "1206", padW: 1.6, pitchX: 3.1, pitchY: 1.6 },
+  { name: "SOT-23", padW: 0.9, pitchX: 2.4, pitchY: 1.9 },
+  { name: "SOIC-8", padW: 0.6, pitchX: 5.4, pitchY: 1.27 },
+  { name: "DIP-8", padW: 1.6, pitchX: 7.62, pitchY: 2.54 },
+  { name: "DIP-16", padW: 1.6, pitchX: 15.24, pitchY: 2.54 },
+];
+
+// Стандартні діаметри отворів (мм) — типовий набір свердел для PCB
+const HOLE_LIB = [
+  { d: 0.3 }, { d: 0.4 }, { d: 0.5 }, { d: 0.6 }, { d: 0.7 }, { d: 0.8 },
+  { d: 0.9 }, { d: 1.0 }, { d: 1.1 }, { d: 1.2 }, { d: 1.3 }, { d: 1.4 },
+  { d: 1.5 }, { d: 1.6 }, { d: 1.8 }, { d: 2.0 }, { d: 2.2 }, { d: 2.5 },
+  { d: 3.0 }, { d: 3.2 },
+];
+
+document.getElementById("detectBtn").onclick = async () => {
+  if (!doc) { toast("Спочатку відкрийте файл"); return; }
+  const statusEl = document.getElementById("detStatus");
+  statusEl.textContent = "Аналіз…";
+  statusEl.className = "status";
+  await new Promise(r => setTimeout(r, 20));
+
+  try {
+    const res = detectPads(doc.canvas);
+    detections = res.detections;
+    renderDetectionSummary(res);
+    drawOverlay();
+    statusEl.className = "status ok";
+    statusEl.textContent = `Знайдено ${detections.length} об'єктів`;
+    document.getElementById("detApply").disabled = detections.length === 0;
+  } catch (err) {
+    console.error(err);
+    statusEl.className = "status err";
+    statusEl.textContent = "Помилка: " + err.message;
+  }
+};
+
+function detectPads(canvas) {
+  const w = canvas.width, h = canvas.height;
+  const ctx = canvas.getContext("2d");
+  const data = ctx.getImageData(0, 0, w, h).data;
+
+  // ---- 1. Determine polarity & adaptive threshold via Otsu on luminance ----
+  const hist = new Uint32Array(256);
+  const lumArr = new Uint8Array(w * h);
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const l = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114) | 0;
+    lumArr[p] = l;
+    hist[l]++;
+  }
+  // Otsu threshold
+  let total = w * h, sumAll = 0;
+  for (let t = 0; t < 256; t++) sumAll += t * hist[t];
+  let sumB = 0, wB = 0, bestVar = -1, thr = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t]; if (!wB) continue;
+    const wF = total - wB; if (!wF) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > bestVar) { bestVar = between; thr = t; }
+  }
+
+  // Decide polarity: the pixels ABOVE threshold are foreground if those are
+  // the minority (typical: bright pads on dark board, or dark ink on white).
+  let above = 0;
+  for (let p = 0; p < w * h; p++) if (lumArr[p] > thr) above++;
+  const brightIsFg = above < w * h * 0.5;
+
+  const isFg = (p) => brightIsFg ? (lumArr[p] > thr) : (lumArr[p] <= thr);
+
+  // ---- 2. Connected components (BFS, 4-neighbour) ----
+  const visited = new Uint8Array(w * h);
+  const blobs = [];
+  const minArea = Math.max(12, Math.round((w * h) / 120000));
+  const maxArea = w * h * 0.25;
+
+  const stack = new Int32Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const p0 = y * w + x;
+      if (visited[p0] || !isFg(p0)) continue;
+      let sp = 0;
+      stack[sp++] = p0;
+      visited[p0] = 1;
+      let minX = x, maxX = x, minY = y, maxY = y, area = 0;
+      let sumX = 0, sumY = 0;
+      while (sp) {
+        const q = stack[--sp];
+        const qx = q % w, qy = (q - qx) / w;
+        area++; sumX += qx; sumY += qy;
+        if (qx < minX) minX = qx;
+        if (qx > maxX) maxX = qx;
+        if (qy < minY) minY = qy;
+        if (qy > maxY) maxY = qy;
+        let n;
+        if (qx > 0)     { n = q - 1; if (!visited[n] && isFg(n)) { visited[n] = 1; stack[sp++] = n; } }
+        if (qx < w - 1) { n = q + 1; if (!visited[n] && isFg(n)) { visited[n] = 1; stack[sp++] = n; } }
+        if (qy > 0)     { n = q - w; if (!visited[n] && isFg(n)) { visited[n] = 1; stack[sp++] = n; } }
+        if (qy < h - 1) { n = q + w; if (!visited[n] && isFg(n)) { visited[n] = 1; stack[sp++] = n; } }
+      }
+      if (area < minArea || area > maxArea) continue;
+      const bw = maxX - minX + 1, bh = maxY - minY + 1;
+      const aspect = bw / bh;
+      if (aspect > 4 || aspect < 0.25) continue;      // skip traces/lines
+      const fill = area / (bw * bh);                  // 0.785 = perfect circle, ~1 = rect
+      if (fill < 0.45) continue;                       // ring/hollow or noise
+      // roundness: a circle inscribed in bbox fills π/4 ≈ 0.785
+      // a rect fills ~1.0. Intermediate → rotated rect or blob.
+      const isRound = fill > 0.6 && fill < 0.87 && Math.abs(aspect - 1) < 0.35;
+      blobs.push({
+        x: sumX / area, y: sumY / area,
+        bw, bh, r: (bw + bh) / 4, area, round: isRound, fill,
+      });
+    }
+  }
+
+  // ---- identify candidate holes (round + small) ----
+  const holes = blobs.filter(b => b.round && b.r > 2);
+  const detections = [];
+  let matched = 0;
+
+  if (doc.pxPerMm) {
+    const pxPerMm = doc.pxPerMm;
+    blobs.forEach(b => {
+      const wMm = b.bw / pxPerMm, hMm = b.bh / pxPerMm;
+      const dMm = Math.min(wMm, hMm);
+      let best = null, bestErr = 0.18, bestKind = null;
+
+      if (b.round) {
+        // holes: compare diameter with standard drill diameters
+        HOLE_LIB.forEach(h => {
+          const err = Math.abs(dMm - h.d) / h.d;
+          if (err < bestErr) { bestErr = err; best = h; bestKind = "hole"; }
         });
-    }
-
-    dilateSlider.oninput = () => { updateFilterParams(); fastRedraw(); };
-    invertBtn.onclick = () => { isInverted = !isInverted; invertBtn.classList.toggle("active"); updateFilterParams(); fastRedraw(); };
-
-    document.getElementById("fileInput").onchange = async (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        if (file.type === "application/pdf") {
-            rawPdfBytes = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({data: rawPdfBytes.slice(0)}).promise;
-            pdfPage = await pdf.getPage(1);
-            const vp = pdfPage.getViewport({scale: 1});
-            pdfViewBox = { x: 0, y: 0, w: vp.width, h: vp.height };
-            originalImg = null;
-        } else {
-            const img = new Image(); img.src = URL.createObjectURL(file);
-            await img.decode(); originalImg = img; pdfPage = null;
-        }
-        await fullDraw();
-    };
-
-    function fastRedraw() {
-        if (!currentCoords) return;
-        const {dx, dy, dw, dh} = currentCoords;
-        const w = window.innerWidth, h = window.innerHeight;
-        ctxImg.clearRect(0, 0, w * dpr, h * dpr);
-        ctxImg.save();
-        ctxImg.beginPath();
-        ctxImg.rect(dx, dy, dw, dh);
-        ctxImg.clip();
-        ctxImg.filter = "url(#docFilter)";
-        ctxImg.drawImage(cacheCanvas, 0, 0, w, h);
-        ctxImg.restore();
-    }
-
-    async function fullDraw() {
-        const w = window.innerWidth, h = window.innerHeight;
-        [canvasImg, canvasOvl, canvasCrp, cacheCanvas].forEach(c => {
-            c.width = w * dpr; c.height = h * dpr; c.style.width = w+"px"; c.style.height = h+"px";
+      } else {
+        // rectangular pads: compare min side with SMD pad width
+        SMD_LIB.forEach(s => {
+          const err = Math.abs(dMm - s.padW) / s.padW;
+          if (err < bestErr) { bestErr = err; best = s; bestKind = "smd"; }
         });
-        [ctxImg, ctxOvl, ctxCrp, cCtx].forEach(ctx => ctx.setTransform(dpr, 0, 0, dpr, 0, 0));
-
-        if (!originalImg && !pdfPage) return;
-        let cw = originalImg ? originalImg.width : pdfViewBox.w, ch = originalImg ? originalImg.height : pdfViewBox.h;
-        let scale = Math.min((w - 100)/cw, (h - 150)/ch);
-        currentScale = scale;
-        let dw = cw * scale, dh = ch * scale;
-        let dx = (w - dw)/2, dy = 80 + (h - 80 - 40 - dh)/2;
-        currentCoords = {dx, dy, dw, dh};
-
-        cCtx.clearRect(0, 0, w, h);
-        if (originalImg) {
-            cCtx.drawImage(originalImg, dx, dy, dw, dh);
-        } else {
-            const vp = pdfPage.getViewport({ scale });
-            await pdfPage.render({canvasContext: cCtx, viewport: vp, transform: [1, 0, 0, 1, dx - (pdfViewBox.x * scale), dy - (pdfViewBox.y * scale)]}).promise;
-        }
-
-        updateFilterParams();
-        fastRedraw();
-
-        ctxOvl.clearRect(0, 0, w, h);
-        ctxOvl.strokeStyle = "red"; ctxOvl.lineWidth = 1; ctxOvl.setLineDash([5, 5]);
-        ctxOvl.strokeRect(dx, dy, dw, dh);
-
-        updateSizeLabel();
-    }
-
-    function getPart(mx, my) {
-        if (!cropRect) return null;
-        const {x, y, w, h} = cropRect; const s = 10;
-        if (Math.abs(mx-x)<s && Math.abs(my-y)<s) return "tl";
-        if (Math.abs(mx-(x+w))<s && Math.abs(my-y)<s) return "tr";
-        if (Math.abs(mx-x)<s && Math.abs(my-(y+h))<s) return "bl";
-        if (Math.abs(mx-(x+w))<s && Math.abs(my-(y+h))<s) return "br";
-        if (Math.abs(my-y)<s && mx>x && mx<x+w) return "t";
-        if (Math.abs(my-(y+h))<s && mx>x && mx<x+w) return "b";
-        if (Math.abs(mx-x)<s && my>y && my<y+h) return "l";
-        if (Math.abs(mx-(x+w))<s && my>y && my<y+h) return "r";
-        if (mx>x && mx<x+w && my>y && my<y+h) return "center";
-        return null;
-    }
-
-    canvasCrp.onmousedown = (e) => {
-        if (!cropMode) return;
-        const part = getPart(e.offsetX, e.offsetY);
-        if (part) { dragging = true; dragPart = part; dragOffset = { x: e.offsetX - cropRect.x, y: e.offsetY - cropRect.y }; }
-    };
-
-    window.onmousemove = (e) => {
-        if (!cropMode) return;
-        const mx = e.offsetX, my = e.offsetY;
-        if (!dragging) {
-            const p = getPart(mx, my);
-            const cursors = { t:"ns-resize", b:"ns-resize", l:"ew-resize", r:"ew-resize", tl:"nwse-resize", br:"nwse-resize", tr:"nesw-resize", bl:"nesw-resize", center:"move" };
-            canvasCrp.style.cursor = cursors[p] || "default"; return;
-        }
-        if (dragPart === "center") { cropRect.x = mx - dragOffset.x; cropRect.y = my - dragOffset.y; }
-        else {
-            if (dragPart.includes("t")) { cropRect.h += cropRect.y - my; cropRect.y = my; }
-            if (dragPart.includes("b")) { cropRect.h = my - cropRect.y; }
-            if (dragPart.includes("l")) { cropRect.w += cropRect.x - mx; cropRect.x = mx; }
-            if (dragPart.includes("r")) { cropRect.w = mx - cropRect.x; }
-        }
-        drawCropFrame();
-    };
-
-    window.onmouseup = () => dragging = false;
-
-    function drawCropFrame() {
-        ctxCrp.clearRect(0,0, window.innerWidth, window.innerHeight);
-        if(!cropMode) return;
-        ctxCrp.fillStyle = "rgba(0,0,0,0.4)"; ctxCrp.fillRect(0,0, window.innerWidth, window.innerHeight);
-        ctxCrp.clearRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
-        ctxCrp.strokeStyle = "#00bfff"; ctxCrp.lineWidth = 2; ctxCrp.setLineDash([]);
-        ctxCrp.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
-        updateSizeLabel();
-    }
-
-    document.querySelectorAll(".align-btn").forEach(btn => {
-        btn.onclick = () => {
-            const u = originalImg ? 1/currentScale : pdfViewBox.w/currentCoords.dw;
-            const dpi = originalImg ? 96 : 72;
-            let mmW = (cropRect.w * u / dpi) * 25.4, mmH = (cropRect.h * u / dpi) * 25.4;
-            const tW = btn.dataset.type==='floor'?Math.floor(mmW):btn.dataset.type==='ceil'?Math.ceil(mmW):Math.round(mmW);
-            const tH = btn.dataset.type==='floor'?Math.floor(mmH):btn.dataset.type==='ceil'?Math.ceil(mmH):Math.round(mmH);
-            cropRect.w = (tW / 25.4 * dpi) / u; cropRect.h = (tH / 25.4 * dpi) / u;
-            drawCropFrame();
-        };
+      }
+      const d = {
+        ...b, wMm, hMm, dMm,
+        matched: !!best,
+        kind: bestKind,
+        label: best ? (bestKind === "hole" ? `⌀${best.d}мм` : best.name)
+                    : (b.round ? "отвір" : "пад"),
+        conf: best ? (1 - bestErr) : 0,
+      };
+      detections.push(d);
+      if (best) matched++;
     });
 
-    document.getElementById("cropBtn").onclick = () => {
-        cropMode = true;
-        cropRect = { x: currentCoords.dx, y: currentCoords.dy, w: currentCoords.dw, h: currentCoords.dh };
-        document.querySelectorAll("#confirmBtn, #cancelBtn, .align-btn").forEach(b => b.style.display = "inline");
-        canvasCrp.style.display = "block";
-        drawCropFrame();
-    };
+    // ---- pitch analysis: find equal-spaced grids of similar holes/pads ----
+    const pitchStats = analyzePitches(detections, pxPerMm);
+    detections.forEach(d => {
+      if (d.pitch) d.label = `${d.label} · ${d.pitch.toFixed(2)}мм`;
+    });
+  } else {
+    blobs.forEach(b => detections.push({
+      ...b, matched: false,
+      label: b.round ? "отвір" : "пад", conf: 0,
+    }));
+  }
 
-    document.getElementById("cancelBtn").onclick = () => {
-        cropMode = false;
-        document.querySelectorAll("#confirmBtn, #cancelBtn, .align-btn").forEach(b => b.style.display = "none");
-        canvasCrp.style.display = "none";
-    };
+  return { detections, matched, pxPerMm: doc.pxPerMm, holes: holes.length };
+}
 
-    document.getElementById("confirmBtn").onclick = async () => {
-        const u = originalImg ? 1/currentScale : pdfViewBox.w/currentCoords.dw;
-        if (originalImg) {
-            const sw = cropRect.w * u, sh = cropRect.h * u;
-            const temp = document.createElement("canvas"); temp.width = sw; temp.height = sh;
-            temp.getContext("2d").drawImage(originalImg, (cropRect.x - currentCoords.dx) * u, (cropRect.y - currentCoords.dy) * u, sw, sh, 0, 0, sw, sh);
-            const img = new Image(); img.src = temp.toDataURL();
-            await new Promise(r => img.onload = r); originalImg = img;
-        } else {
-            pdfViewBox.x += (cropRect.x - currentCoords.dx) * u; pdfViewBox.y += (cropRect.y - currentCoords.dy) * u;
-            pdfViewBox.w = cropRect.w * u; pdfViewBox.h = cropRect.h * u;
-        }
-        document.getElementById("cancelBtn").click(); await fullDraw();
-    };
-
-    async function getProcessedCanvas(targetDPI) {
-        const exportScale = targetDPI / 72;
-        const rW = (originalImg ? originalImg.width * (targetDPI/96) : pdfViewBox.w * exportScale);
-        const rH = (originalImg ? originalImg.height * (targetDPI/96) : pdfViewBox.h * exportScale);
-
-        const out = document.createElement("canvas");
-        out.width = rW; out.height = rH;
-        const oCtx = out.getContext("2d");
-
-        if (originalImg) {
-            oCtx.drawImage(originalImg, 0, 0, rW, rH);
-        } else {
-            const vp = pdfPage.getViewport({ scale: exportScale });
-            await pdfPage.render({
-                canvasContext: oCtx, viewport: vp,
-                transform: [1, 0, 0, 1, -pdfViewBox.x * exportScale, -pdfViewBox.y * exportScale]
-            }).promise;
-        }
-
-        const previewWidthPixels = currentCoords.dw * dpr;
-        const multiplier = rW / previewWidthPixels;
-        const exportRadius = parseFloat(dilateSlider.value) * multiplier;
-
-        const final = document.createElement("canvas");
-        final.width = rW; final.height = rH;
-        const fCtx = final.getContext("2d");
-
-        const fId = "expFilter_" + Date.now();
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.style.position = "absolute"; svg.style.top = "-9999px";
-        svg.innerHTML = `
-            <filter id="${fId}" color-interpolation-filters="sRGB">
-                <feMorphology operator="erode" radius="${exportRadius}"/>
-                <feComponentTransfer>
-                    ${isInverted ? '<feFuncR type="table" tableValues="1 0"/><feFuncG type="table" tableValues="1 0"/><feFuncB type="table" tableValues="1 0"/>' : ''}
-                </feComponentTransfer>
-            </filter>`;
-        document.body.appendChild(svg);
-
-        fCtx.filter = `url(#${fId})`;
-        fCtx.drawImage(out, 0, 0);
-
-        const d = fCtx.getImageData(0, 0, rW, rH);
-        for(let i = 0; i < d.data.length; i += 4) {
-            let avg = (d.data[i] + d.data[i+1] + d.data[i+2]) / 3;
-            let val = avg > 128 ? 255 : 0;
-            d.data[i] = d.data[i+1] = d.data[i+2] = val;
-            d.data[i+3] = 255;
-        }
-        fCtx.putImageData(d, 0, 0);
-        document.body.removeChild(svg);
-        return final;
+/* Find dominant spacing between same-sized neighbours.
+   Returns { pitch: mm, confidence } — the most common nearest-neighbour distance
+   among round objects of similar size, snapped to standard pitches if close. */
+function analyzePitches(dets, pxPerMm) {
+  const round = dets.filter(d => d.round);
+  if (round.length < 4) return { pitch: null };
+  // nearest-neighbour distances
+  const dists = [];
+  for (let i = 0; i < round.length; i++) {
+    let min = Infinity;
+    for (let j = 0; j < round.length; j++) {
+      if (i === j) continue;
+      if (Math.abs(round[i].r - round[j].r) > Math.max(2, round[i].r * 0.35)) continue;
+      const d = Math.hypot(round[j].x - round[i].x, round[j].y - round[i].y) / pxPerMm;
+      if (d < min) min = d;
     }
+    if (isFinite(min)) dists.push(min);
+  }
+  if (dists.length < 3) return { pitch: null };
+  dists.sort((a, b) => a - b);
+  const median = dists[Math.floor(dists.length / 2)];
+  // snap to standard pitches
+  const STANDARD = [0.5, 0.65, 0.8, 1.0, 1.27, 1.5, 2.0, 2.5, 2.54, 3.0, 5.08];
+  let snap = median, bestE = 0.12;
+  STANDARD.forEach(s => {
+    const e = Math.abs(median - s) / s;
+    if (e < bestE) { bestE = e; snap = s; }
+  });
+  return { pitch: snap, snapped: snap !== median, median };
+}
 
-    document.getElementById("exportPngBtn").onclick = async () => {
-        const out = await getProcessedCanvas(1500);
-        const a = document.createElement("a"); a.download = "export.png";
-        a.href = out.toDataURL("image/png"); a.click();
-    };
+function renderDetectionSummary(res) {
+  const sum = document.getElementById("detSummary");
+  const list = document.getElementById("detList");
+  sum.style.display = "block";
+  const matched = res.detections.filter(d => d.matched).length;
+  const holeCount = res.detections.filter(d => d.round).length;
+  const padCount = res.detections.filter(d => !d.round).length;
 
-    document.getElementById("exportPdfBtn").onclick = async () => {
-        const out = await getProcessedCanvas(600);
-        const pdfDoc = await PDFDocument.create();
-        const pngImg = await pdfDoc.embedPng(out.toDataURL("image/png"));
-        const page = pdfDoc.addPage([pdfViewBox.w, pdfViewBox.h]);
-        page.drawImage(pngImg, { x: 0, y: 0, width: pdfViewBox.w, height: pdfViewBox.h });
-        const a = document.createElement("a"); a.download = "export.pdf";
-        a.href = URL.createObjectURL(new Blob([await pdfDoc.save()])); a.click();
-    };
+  let suggestion = "";
+  // Suggest scale from median hole diameter assuming standard drills
+  const holes = res.detections.filter(d => d.round && d.dMm);
+  if (holes.length >= 3) {
+    const sorted = holes.map(h => h.dMm).sort((a, b) => a - b);
+    const med = sorted[Math.floor(sorted.length / 2)];
+    const snap = HOLE_LIB.map(h => h.d).reduce((best, d) =>
+      Math.abs(d - med) < Math.abs(best - med) ? d : best, med);
+    suggestion = `<br>медіанний отвір: <b>${med.toFixed(2)} мм</b> → типовий <b>⌀${snap} мм</b>`;
+  }
 
-    function updateSizeLabel() {
-        if (!currentCoords) return;
-        const u = originalImg ? 1/currentScale : pdfViewBox.w/currentCoords.dw;
-        const w = (cropMode ? cropRect.w : currentCoords.dw), h = (cropMode ? cropRect.h : currentCoords.dh);
-        document.getElementById("sizeDisplay").innerText = `${((w*u/(originalImg?96:72))*25.4).toFixed(1)} x ${((h*u/(originalImg?96:72))*25.4).toFixed(1)} мм`;
-    }
+  sum.innerHTML = `Знайдено <b>${res.detections.length}</b> об'єктів:<br>
+    круглих (отвори/пади): <b>${holeCount}</b><br>
+    прямокутних (прямокутні пади): <b>${padCount}</b><br>
+    відповідають стандартам: <b>${matched}</b><br>
+    масштаб: <b>${res.pxPerMm ? (res.pxPerMm * 25.4).toFixed(0) + " DPI" : "невідомо"}</b>${suggestion}`;
 
-    window.onresize = fullDraw;
+  list.innerHTML = "";
+  const counts = {};
+  res.detections.forEach(d => { counts[d.label] = (counts[d.label] || 0) + 1; });
+  Object.entries(counts).sort((a, b) => b[1] - a[1]).forEach(([label, n]) => {
+    const el = document.createElement("div");
+    el.className = "det-item";
+    el.innerHTML = `<span class="tag">${label}</span><span class="conf">× ${n}</span>`;
+    list.appendChild(el);
+  });
+}
+
+document.getElementById("detApply").onclick = () => {
+  if (!doc || !doc.pxPerMm) { toast("Спочатку встановіть масштаб"); return; }
+  const s = parseFloat(document.getElementById("scaleDistMm").value);
+  toast("Автоматичне вирівняння за розпізнаними елементами — експериментально");
+};
+
+/* ============================================================
+   EXPORT
+   ============================================================ */
+async function getProcessedCanvas(targetDPI) {
+  const exportScale = targetDPI / 72;
+  // effective: current doc.canvas already at its own pxPerMm
+  const outW = Math.max(1, Math.round(doc.canvas.width * (targetDPI / (doc.pxPerMm * 25.4)) || doc.canvas.width));
+  const outH = Math.max(1, Math.round(doc.canvas.height * (targetDPI / (doc.pxPerMm * 25.4)) || doc.canvas.height));
+
+  const out = document.createElement("canvas");
+  out.width = outW; out.height = outH;
+  const o = out.getContext("2d");
+  o.imageSmoothingEnabled = true;
+  o.imageSmoothingQuality = "high";
+  o.drawImage(doc.canvas, 0, 0, outW, outH);
+
+  // apply dilate + invert via SVG filter (same as on-screen pipeline)
+  const final = document.createElement("canvas");
+  final.width = outW; final.height = outH;
+  const f = final.getContext("2d");
+
+  const fId = "exp_" + Math.random().toString(36).slice(2);
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.style.position = "absolute"; svg.style.top = "-9999px";
+  const exportRadius = parseFloat(dilateSlider.value) * (outW / Math.max(1, doc.canvas.width));
+  svg.innerHTML = `
+    <filter id="${fId}" color-interpolation-filters="sRGB">
+      <feMorphology operator="erode" radius="${exportRadius}"/>
+      <feComponentTransfer>
+        ${isInverted ? '<feFuncR type="table" tableValues="1 0"/><feFuncG type="table" tableValues="1 0"/><feFuncB type="table" tableValues="1 0"/>' : ''}
+      </feComponentTransfer>
+    </filter>`;
+  document.body.appendChild(svg);
+  f.filter = `url(#${fId})`;
+  f.drawImage(out, 0, 0);
+  document.body.removeChild(svg);
+
+  const d = f.getImageData(0, 0, outW, outH);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const avg = (d.data[i] + d.data[i+1] + d.data[i+2]) / 3;
+    const v = avg > 128 ? 255 : 0;
+    d.data[i] = d.data[i+1] = d.data[i+2] = v;
+    d.data[i + 3] = 255;
+  }
+  f.putImageData(d, 0, 0);
+  return final;
+}
+
+document.getElementById("exportPngBtn").onclick = async () => {
+  if (!doc) { toast("Немає файлу"); return; }
+  const st = document.getElementById("exportStatus");
+  st.textContent = "Рендер PNG…";
+  try {
+    const dpi = parseInt(document.getElementById("pngDpi").value, 10);
+    const out = await getProcessedCanvas(dpi);
+    const a = document.createElement("a");
+    a.download = `pcb_${dpi}dpi.png`;
+    a.href = out.toDataURL("image/png");
+    a.click();
+    st.textContent = `Готово: ${out.width}×${out.height} px`;
+  } catch (e) { st.textContent = "Помилка: " + e.message; }
+};
+
+document.getElementById("exportPdfBtn").onclick = async () => {
+  if (!doc) { toast("Немає файлу"); return; }
+  const st = document.getElementById("exportStatus");
+  st.textContent = "Рендер PDF…";
+  try {
+    const dpi = parseInt(document.getElementById("pdfDpi").value, 10);
+    const out = await getProcessedCanvas(dpi);
+    const pdfDoc = await PDFDocument.create();
+    const png = await pdfDoc.embedPng(out.toDataURL("image/png"));
+    // page size in points, honoring physical size
+    // out is rendered at `dpi`; 1 inch = 72 pt
+    const pageW = (out.width / dpi) * 72;
+    const pageH = (out.height / dpi) * 72;
+    const page = pdfDoc.addPage([pageW, pageH]);
+    page.drawImage(png, { x: 0, y: 0, width: pageW, height: pageH });
+    const a = document.createElement("a");
+    a.download = `pcb_${dpi}dpi.pdf`;
+    a.href = URL.createObjectURL(new Blob([await pdfDoc.save()], { type: "application/pdf" }));
+    a.click();
+    st.textContent = `Готово: ${pageW.toFixed(1)}×${pageH.toFixed(1)} pt`;
+  } catch (e) { st.textContent = "Помилка: " + e.message; }
+};
+
+/* ============================================================
+   GLOBAL UI WIRING
+   ============================================================ */
+document.getElementById("openBtn").onclick = () => document.getElementById("fileInput").click();
+document.getElementById("fileInput").onchange = (e) => loadFile(e.target.files[0]);
+
+dilateSlider.oninput = () => { updateFilterParams(); render(); };
+invertChk.onchange = () => { isInverted = invertChk.checked; updateFilterParams(); render(); };
+
+document.getElementById("unitMm").onclick = () => setUnit("mm");
+document.getElementById("unitInch").onclick = () => setUnit("inch");
+function setUnit(u) {
+  unit = u;
+  const bm = document.getElementById("unitMm"), bi = document.getElementById("unitInch");
+  const on = "background:var(--accent);color:#fff;border-color:var(--accent)";
+  bm.style.cssText = u === "mm" ? on : "";
+  bi.style.cssText = u === "inch" ? on : "";
+  updateSizeLabel();
+}
+
+document.getElementById("undoBtn").onclick = undo;
+
+document.getElementById("resetBtn").onclick = () => {
+  if (!doc) return;
+  pushHistory();
+  doc.canvas = cloneCanvas(doc.origCanvas);
+  doc.pxPerMm = doc.source === "pdf" ? (function(){
+    // recompute base: we stored nothing; approximate: keep current if pdf
+    return doc.pxPerMm;
+  })() : 96 / 25.4;
+  // best-effort: keep pxPerMm of original load
+  if (doc._origPxPerMm == null) doc._origPxPerMm = doc.pxPerMm;
+  doc.pxPerMm = doc._origPxPerMm;
+  cropRect = null; perspQuad = null; twoPoints = [];
+  updateScaleTwoButton();
+  if (tool === "crop") initCrop();
+  if (tool === "perspective") initPerspective();
+  fitToView(); render();
+  toast("Скинуто до оригіналу");
+};
+
+/* drag & drop */
+stage.addEventListener("dragover", (e) => { e.preventDefault(); stage.classList.add("drag-over"); });
+stage.addEventListener("dragleave", () => stage.classList.remove("drag-over"));
+stage.addEventListener("drop", (e) => {
+  e.preventDefault(); stage.classList.remove("drag-over");
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+/* keyboard */
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if ((e.ctrlKey || e.metaKey) && e.key === "z") { undo(); e.preventDefault(); return; }
+  if (e.key === "v" || e.key === "V") switchTool("move");
+  if (e.key === "c" || e.key === "C") switchTool("crop");
+  if (e.key === "p" || e.key === "P") switchTool("perspective");
+  if (e.key === "s" || e.key === "S") switchTool("scale");
+  if (e.key === "d" || e.key === "D") switchTool("detect");
+  if (e.key === "Escape") { twoPoints = []; drawToolLayer(); }
+});
+
+/* resize */
+window.addEventListener("resize", () => {
+  resizeCanvases();
+  // keep image roughly in place: re-fit if no doc change
+  if (doc) { fitToView(); render(); }
+});
+
+/* init */
+resizeCanvases();
+updateFilterParams();
 </script>
 </body>
 </html>
