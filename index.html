@@ -2031,23 +2031,13 @@ document.getElementById("perspReset").onclick = () => {
 const ROUND_STEP = 1;          // whole millimetres
 const EPS = 1e-6;
 
+// cmp: "floor" | "ceil" | "round" — always applied to the RAW value, so the
+// direction is guaranteed by Math.floor/Math.ceil themselves.
 function roundValue(v, type) {
   if (!(v > 0)) return v;
-  const whole = Math.floor(v + EPS);        // integer part, tail ignored
-  const tail = v - whole;                   // 0 .. just under 1
-  const hasTail = tail > EPS;
-
-  let n;
-  if (type === "floor") {
-    // drop the tenths completely
-    n = whole;
-  } else if (type === "ceil") {
-    // exact whole stays; anything above it climbs one step
-    n = hasTail ? whole + 1 : whole;
-  } else {
-    // "auto": keep the whole part unless the tail is a true half or more
-    n = tail >= 0.5 - EPS ? whole + 1 : whole;
-  }
+  const n = type === "floor" ? Math.floor(v + EPS)
+          : type === "ceil"  ? Math.ceil(v - EPS)
+          : Math.round(v);
   return Math.max(1, n);
 }
 
@@ -2061,8 +2051,10 @@ document.querySelectorAll('.pane[data-pane="crop"] .round-btn').forEach(btn => {
     const mmW = cropRect.w / doc.pxPerMm;
     const mmH = cropRect.h / doc.pxPerMm;
 
-    const tW = roundValue(mmW, type);
-    const tH = roundValue(mmH, type);
+    const mmW0 = cropRect.w / doc.pxPerMm;
+    const mmH0 = cropRect.h / doc.pxPerMm;
+    const tW = roundValue(mmW0, type);
+    const tH = roundValue(mmH0, type);
     if (!(tW >= 1) || !(tH >= 1)) { toast(t("msg.sizeUnder1mm"), 2500); return; }
     // The frame is authored in whole millimetres. Keep the rounded mm as the
     // declared size and only store the matching pixel count for drawing, so
@@ -2078,7 +2070,7 @@ document.querySelectorAll('.pane[data-pane="crop"] .round-btn').forEach(btn => {
 
 // Scale pane: resize the whole image immediately to whole-mm dimensions.
 // lock = keep aspect ratio: the width drives the height.
-document.querySelectorAll('#scaleWhPane .round-btn').forEach(btn => {
+document.querySelectorAll('.pane[data-pane="scale"] .round-btn').forEach(btn => {
   btn.onclick = () => {
     if (!doc) return;
     if (!doc.pxPerMm) { toast(t("msg.scaleUnknown"), 3000); return; }
