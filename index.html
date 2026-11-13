@@ -740,28 +740,38 @@
         <div class="field">
           <label data-i18n="trace.mode">Режим відділення</label>
           <div class="row3" id="trModeRow">
-            <button class="btn round-btn" data-trmode="luma" data-i18n-tip="trace.mode.luma.tip" title="За яскравістю (чорне/біле)">
+            <button class="btn round-btn" data-trmode="luma" data-i18n-tip="trace.mode.luma.tip" title="За яскравістю — добре для ч/б скану">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
               <span data-i18n="trace.mode.luma">Світло</span>
             </button>
-            <button class="btn round-btn" data-trmode="color" data-i18n-tip="trace.mode.color.tip" title="За кольором (відтінок + насиченість)">
+            <button class="btn round-btn active-mode" data-trmode="color" data-i18n-tip="trace.mode.color.tip" title="За контрастом кольору — найкраще для фото">
               <svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/></svg>
-              <span data-i18n="trace.mode.color">Колір</span>
+              <span data-i18n="trace.mode.color">Контраст</span>
             </button>
-            <button class="btn round-btn" data-trmode="adaptive" data-i18n-tip="trace.mode.adaptive.tip" title="Локальна адаптація — рівномірно на нерівному фоні">
+            <button class="btn round-btn" data-trmode="colour-threshold" data-i18n-tip="trace.mode.adaptive.tip" title="Старий спосіб: поріг кольору">
               <svg viewBox="0 0 24 24"><path d="M4 18l5-10 4 8 3-5 4 7"/></svg>
-              <span data-i18n="trace.mode.adaptive">Авто</span>
+              <span data-i18n="trace.mode.adaptive">Поріг</span>
             </button>
           </div>
+          <p class="hint" style="margin:6px 0 0" data-i18n="trace.contrastHint">Контраст — шукає різкий перепад кольору на межі міді й фону. Не залежить від нерівного освітлення.</p>
         </div>
 
         <div class="field">
-          <label data-i18n="trace.thresh">Поріг міді</label>
+          <label data-i18n="trace.thresh">Сила контрасту</label>
           <div class="slider-row">
-            <input type="range" id="trThresh" min="0" max="255" step="1" value="128">
-            <output id="trThreshVal">128</output>
+            <input type="range" id="trThresh" min="10" max="255" step="1" value="70">
+            <output id="trThreshVal">70</output>
           </div>
-          <p class="hint" style="margin:6px 0 0" data-i18n="trace.threshHint">Піпетка підбирає поріг сама. Повзунок — коли треба взяти більше або менше.</p>
+          <p class="hint" style="margin:6px 0 0" data-i18n="trace.threshHint">Поріг перепаду. Нижче — бере і слабкі межі в тіні. Вище — лише різкі.</p>
+        </div>
+
+        <div class="field">
+          <label data-i18n="trace.sharp">Ширина переходу, px</label>
+          <div class="slider-row">
+            <input type="range" id="trSharp" min="1" max="5" step="1" value="1">
+            <output id="trSharpVal">1</output>
+          </div>
+          <p class="hint" style="margin:6px 0 0" data-i18n="trace.sharpHint">Як далеко дивитись убік при пошуку перепаду. 1 — різкий край. 2–3 — розмите фото, де межа пливе на кілька пікселів.</p>
         </div>
 
         <div class="field">
@@ -779,6 +789,15 @@
             <input type="range" id="trMinArea" min="4" max="400" step="4" value="60">
             <output id="trMinAreaVal">60</output>
           </div>
+        </div>
+
+        <div class="field">
+          <label data-i18n="trace.copperPct">Скільки міді на платі, %</label>
+          <div class="slider-row">
+            <input type="range" id="trCopperPct" min="5" max="95" step="5" value="45">
+            <output id="trCopperPctVal">45</output>
+          </div>
+          <p class="hint" style="margin:6px 0 0" data-i18n="trace.copperPctHint">Контур лише ділить площу. Щоб знати, яка сторона — мідь, треба оцінити її частку.</p>
         </div>
 
         <div class="field">
@@ -3495,7 +3514,9 @@ const trState = {
   mode: "color",
   sample: null,
   sample2: null,
-  thresh: 128,
+  thresh: 70,
+  sharpness: 1,
+  copperPct: 45,
   close: 1,
   minArea: 60,
   simplify: 0.75,
@@ -3508,7 +3529,251 @@ const trState = {
   dirty: true,
 };
 
-// ---- 1. copper mask (same colour maths as the binarizer) ----
+// ---- 1a. edge strength: the CONTRAST between neighbouring pixels ----
+// This is the point of the whole tool. Copper is not one colour across the
+// whole board: lighting, shadows and the photo itself drift. But wherever
+// copper meets substrate there is a sharp, local jump in colour — and that
+// jump is the same sharpness in the bright corner and in the dark one. So we
+// search for the jump, not for the colour.
+//
+// Per pixel we take the longest colour difference to its 4 neighbours inside a
+// small window, so a soft/antialiased border (which spreads over 2-3 px) still
+// produces one strong ridge instead of a weak gradient everywhere.
+function trEdgeStrength(src) {
+  const w = src.width, h = src.height;
+  const data = src.getContext("2d").getImageData(0, 0, w, h).data;
+  const n = w * h;
+  const gray = new Float32Array(n);
+  const L = new Float32Array(n);   // perceptual lightness proxy
+  const A = new Float32Array(n);   // colour opponent a  (red-green)
+  const B = new Float32Array(n);   // colour opponent b  (yellow-blue)
+
+  const colorMode = trState.mode !== "luma";
+
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    gray[p] = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (colorMode) {
+      // opponent axes: a jump from copper to green substrate is huge here
+      // even when the two happen to be equally bright
+      L[p] = 0.299 * r + 0.587 * g + 0.114 * b;
+      A[p] = r - g;
+      B[p] = 0.5 * (r + g) - b;
+    }
+  }
+
+  // step: 1 for a hairline edge; 2-3 when the photo is blurry and the border
+  // fades over several pixels. A wider step still finds the jump, just places
+  // the ridge where the difference is largest.
+  const step = Math.max(1, trState.sharpness | 0);
+  const gOut = new Float32Array(n);
+
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      const p = row + x;
+      let best = 0;
+      // right and down are enough: every pair is visited once, and we take the
+      // max from both sides below so the ridge is symmetric
+      if (x + step < w) {
+        const q = p + step;
+        const d = colorMode
+          ? Math.max(Math.abs(L[q] - L[p]),
+                     Math.abs(A[q] - A[p]) * 1.0,
+                     Math.abs(B[q] - B[p]) * 1.0)
+          : Math.abs(gray[q] - gray[p]);
+        if (d > best) best = d;
+      }
+      if (y + step < h) {
+        const q = p + step * w;
+        const d = colorMode
+          ? Math.max(Math.abs(L[q] - L[p]),
+                     Math.abs(A[q] - A[p]) * 1.0,
+                     Math.abs(B[q] - B[p]) * 1.0)
+          : Math.abs(gray[q] - gray[p]);
+        if (d > best) best = d;
+      }
+      gOut[p] = best;
+    }
+  }
+
+  // the jump between p and p+step belongs to both pixels; give each of them
+  // the strongest jump it takes part in, so the ridge is a symmetric band
+  const sym = new Float32Array(n);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      const p = row + x;
+      let v = gOut[p];
+      if (x - step >= 0 && gOut[p - step] > v) v = gOut[p - step];
+      if (y - step >= 0 && gOut[p - step * w] > v) v = gOut[p - step * w];
+      sym[p] = v;
+    }
+  }
+  return { edge: sym, w, h };
+}
+
+// ---- 1b. hysteresis: a strong ridge seeds, a weaker one connects ----
+// One threshold cannot work on a photo: in the shadowed half the jump is
+// smaller but still the sharpest thing around. Instead the strong pixels
+// seed the contour and the mid-strength ones only extend it, so a contour
+// never starts in the noise but also never breaks in a dim corner.
+function trHysteresis(edge, w, h, hi, lo) {
+  const n = w * h;
+  const mask = new Uint8Array(n);
+  const stack = new Int32Array(n);
+  let sp = 0;
+  for (let p = 0; p < n; p++) if (edge[p] >= hi) { mask[p] = 1; stack[sp++] = p; }
+  while (sp) {
+    const q = stack[--sp];
+    const y = (q / w) | 0, x = q - y * w;
+    for (let dy = -1; dy <= 1; dy++) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= h) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx;
+        if (xx < 0 || xx >= w) continue;
+        const r = yy * w + xx;
+        if (mask[r] || edge[r] < lo) continue;
+        mask[r] = 1; stack[sp++] = r;
+      }
+    }
+  }
+  return mask;
+}
+
+// thin the ridge to a single-pixel skeleton so the outline is one line and
+// not a wide smeared band (Zhang-Suen, 2 sub-iterations per pass)
+function trThin(mask, w, h) {
+  const cur = Uint8Array.from(mask);
+  let changed = true, guard = 0;
+  while (changed && guard++ < 60) {
+    changed = false;
+    for (let sub = 0; sub < 2; sub++) {
+      const del = [];
+      for (let y = 1; y < h - 1; y++) {
+        const row = y * w;
+        for (let x = 1; x < w - 1; x++) {
+          const p = row + x;
+          if (!cur[p]) continue;
+          const p2 = cur[p - w], p3 = cur[p - w + 1], p4 = cur[p + 1],
+                p5 = cur[p + w + 1], p6 = cur[p + w], p7 = cur[p + w - 1],
+                p8 = cur[p - 1], p9 = cur[p - w - 1];
+          const cn = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
+          if (cn < 2 || cn > 6) continue;
+          const seq = [p2, p3, p4, p5, p6, p7, p8, p9, p2];
+          let trans = 0;
+          for (let i = 0; i < 8; i++) if (!seq[i] && seq[i + 1]) trans++;
+          if (trans !== 1) continue;
+          if (sub === 0) {
+            if (p2 && p4 && p6) continue;
+            if (p4 && p6 && p8) continue;
+          } else {
+            if (p2 && p4 && p8) continue;
+            if (p2 && p6 && p8) continue;
+          }
+          del.push(p);
+        }
+      }
+      if (del.length) { changed = true; for (const p of del) cur[p] = 0; }
+    }
+  }
+  return cur;
+}
+
+// close 1-px pinholes in a ridge without fattening the line
+function trBridge(mask, w, h, r) {
+  if (r <= 0) return mask;
+  const dil = trDilate(mask, w, h, r);
+  const clo = trErode(dil, w, h, r);
+  // re-open the skeleton-ish weight to avoid a fat band
+  return trThin(clo, w, h);
+}
+
+// ---- 1c. which side is copper? ----
+// The ridge itself says nothing about what is inside. Walk the enclosed areas
+// and decide with the picked sample (or, without one, with the darker side).
+function trFillRegions(ridge, w, h, src) {
+  const n = w * h;
+  const data = src.getContext("2d").getImageData(0, 0, w, h).data;
+  const labels = new Int32Array(n);
+  const stack = new Int32Array(n);
+  const s = trState.sample, s2 = trState.sample2;
+  const regions = [];
+  let next = 0;
+
+  const sumR = [], sumG = [], sumB = [], cnt = [], touchesBorder = [];
+
+  for (let p = 0; p < n; p++) {
+    if (ridge[p] || labels[p]) continue;
+    next++;
+    let sp = 0;
+    stack[sp++] = p; labels[p] = next;
+    let area = 0, r = 0, g = 0, b = 0, edge = false;
+    let minX = w, maxX = 0, minY = h, maxY = 0;
+    while (sp) {
+      const q = stack[--sp];
+      const y = (q / w) | 0, x = q - y * w;
+      area++;
+      const i = q * 4;
+      r += data[i]; g += data[i + 1]; b += data[i + 2];
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (x > 0 && !ridge[q - 1] && !labels[q - 1]) { labels[q - 1] = next; stack[sp++] = q - 1; }
+      if (x < w - 1 && !ridge[q + 1] && !labels[q + 1]) { labels[q + 1] = next; stack[sp++] = q + 1; }
+      if (y > 0 && !ridge[q - w] && !labels[q - w]) { labels[q - w] = next; stack[sp++] = q - w; }
+      if (y < h - 1 && !ridge[q + w] && !labels[q + w]) { labels[q + w] = next; stack[sp++] = q + w; }
+    }
+    sumR[next] = r / area; sumG[next] = g / area; sumB[next] = b / area;
+    cnt[next] = area; touchesBorder[next] = edge;
+    regions.push({ id: next, area, minX, maxX, minY, maxY, edge });
+  }
+
+  // copper-ness of a region: distance to the picked colours, or the darker
+  // (or more saturated) one when nothing was picked
+  const score = new Map();
+  const hasSample = !!(s || s2);
+  for (const reg of regions) {
+    const id = reg.id;
+    const r = sumR[id], g = sumG[id], b = sumB[id];
+    let v;
+    if (hasSample) {
+      v = Infinity;
+      if (s) v = Math.min(v, colorDistance(r, g, b, s.r, s.g, s.b));
+      if (s2) v = Math.min(v, colorDistance(r, g, b, s2.r, s2.g, s2.b));
+      v = -v;   // closer to the sample = more copper
+    } else {
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const sat = Math.max(r, g, b) - Math.min(r, g, b);
+      v = lum + sat * 0.5;
+    }
+    score.set(id, v);
+  }
+
+  // the huge region touching the frame is the substrate: never copper
+  const keep = new Uint8Array(n);
+  const ids = regions.filter(rr => !rr.edge).map(rr => rr.id);
+  ids.sort((a, b) => score.get(a) - score.get(b));
+  const cut = trState.copperPct / 100;
+  const nKeep = Math.max(1, Math.round(ids.length * cut));
+  const chosen = new Set(ids.slice(-nKeep));
+
+  return { labels, regionIds: chosen, regions };
+}
+
+// build the copper mask from the contrast ridges
+function trBuildMaskFromEdges(src) {
+  const { edge, w, h } = trEdgeStrength(src);
+  const hi = trState.thresh;
+  const lo = Math.max(1, Math.round(hi * 0.45));
+  const ridge = trHysteresis(edge, w, h, hi, lo);
+  const thin = trThin(ridge, w, h);
+  const bridged = trBridge(thin, w, h, trState.close | 0);
+  return { ridge: bridged, w, h };
+}
+
+// ---- 1. copper mask (legacy colour threshold, kept for the luma fallback) ----
 function trBuildMask(src) {
   const w = src.width, h = src.height;
   const data = src.getContext("2d").getImageData(0, 0, w, h).data;
@@ -3750,11 +4015,7 @@ function trBuild() {
   ensureBase();
   const src = doc.base;
   const w = src.width, h = src.height;
-  const { mask } = trBuildMask(src);
-  const cl = trState.close | 0;
-  const work = cl > 0 ? trErode(trDilate(mask, w, h, cl), w, h, cl) : mask;
-  const { labels, blobs } = trLabel(work, w, h);
-  const minA = Math.max(1, trState.minArea | 0);
+  const n = w * h;
 
   const out = document.createElement("canvas");
   out.width = w; out.height = h;
@@ -3771,28 +4032,54 @@ function trBuild() {
   const wantHoles = trState.edgesOnly;
   let drawn = 0;
 
-  for (const blob of blobs) {
-    if (blob.area < minA) continue;
-    // label the whole image at once is expensive; trace per blob window
-    const loops = trTraceEdges(work, w, h, labels, blob.id);
-    if (!loops.length) continue;
-    const polys = loops.map(l => {
-      // depth of a loop: even-odd nesting decides outer border vs hole
-      const pts = trSimplify(trLoopToPoints(l), trState.simplify);
-      return { pts, area: Math.abs(polyArea(l)) };
-    }).filter(p => p.pts.length >= 3);
-    if (!polys.length) continue;
-    polys.sort((a, b) => b.area - a.area);
-    drawn += polys.length;
+  if (trState.mode === "colour-threshold") {
+    // legacy path: colour/luma threshold → regions → edge loops
+    const { mask } = trBuildMask(src);
+    const cl = trState.close | 0;
+    const work = cl > 0 ? trErode(trDilate(mask, w, h, cl), w, h, cl) : mask;
+    const { labels, blobs } = trLabel(work, w, h);
+    const minA = Math.max(1, trState.minArea | 0);
+    for (const blob of blobs) {
+      if (blob.area < minA) continue;
+      const loops = trTraceEdges(work, w, h, labels, blob.id);
+      if (!loops.length) continue;
+      const polys = loops.map(l => ({ pts: trSimplify(trLoopToPoints(l), trState.simplify), area: Math.abs(polyArea(l)) }))
+        .filter(pp => pp.pts.length >= 3);
+      if (!polys.length) continue;
+      polys.sort((a, b) => b.area - a.area);
+      drawn += polys.length;
+      oc.beginPath();
+      polys.forEach((poly, i) => {
+        if (i > 0 && !wantHoles) return;
+        poly.pts.forEach((pp, k) => k ? oc.lineTo(pp.x, pp.y) : oc.moveTo(pp.x, pp.y));
+        oc.closePath();
+      });
+      if (fill) oc.fill("evenodd"); else oc.stroke();
+    }
+  } else {
+    // CONTRAST path: the ridge between copper and substrate IS the outline.
+    // Every pocket sealed by a ridge is one copper shape; a pocket inside it is
+    // its hole and comes out of the tracer as an inner loop automatically.
+    const { ridge } = trBuildMaskFromEdges(src);
+    const { labels, regions } = trTopCycles(ridge, w, h, trState.minArea | 0);
+    const minA = Math.max(1, trState.minArea | 0);
 
-    oc.beginPath();
-    polys.forEach((poly, i) => {
-      if (i > 0 && !wantHoles) return;
-      poly.pts.forEach((p, k) => k ? oc.lineTo(p.x, p.y) : oc.moveTo(p.x, p.y));
-      oc.closePath();
-    });
-    if (fill) oc.fill("evenodd");
-    else oc.stroke();
+    const shapes = regions.filter(r => !r.touch && r.area >= minA);
+    for (const shp of shapes) {
+      const loops = trTraceEdges(labels, w, h, labels, shp.id);
+      const polys = loops.map(l => ({ pts: trSimplify(trLoopToPoints(l), trState.simplify), area: Math.abs(polyArea(l)) }))
+        .filter(pp => pp.pts.length >= 3);
+      if (!polys.length) continue;
+      polys.sort((a, b) => b.area - a.area);
+      drawn += polys.length;
+      oc.beginPath();
+      polys.forEach((poly, i) => {
+        if (i > 0 && !wantHoles) return;
+        poly.pts.forEach((pp, k) => k ? oc.lineTo(pp.x, pp.y) : oc.moveTo(pp.x, pp.y));
+        oc.closePath();
+      });
+      if (fill) oc.fill("evenodd"); else oc.stroke();
+    }
   }
 
   trState.result = out;
@@ -3800,6 +4087,74 @@ function trBuild() {
   const cnt = document.getElementById("trCount");
   if (cnt) cnt.textContent = String(drawn);
   return out;
+}
+
+
+// Which regions are reachable from the frame WITHOUT crossing copper.
+// A hole inside a pad answers "no": its only way out lands in the pad, which is
+// copper, so the pad stays drawn and the hole is not mistaken for a copper
+// shape of its own.
+function trOutsideMap(labels, w, h) {
+  const n = w * h;
+  const seen = new Uint8Array(n);
+  const stack = new Int32Array(n);
+  const isCopper = trState._isCopper || new Set();
+  let sp = 0;
+  const push = (p) => {
+    if (seen[p]) return;
+    if (isCopper.has(labels[p])) return;   // copper blocks the way out
+    seen[p] = 1; stack[sp++] = p;
+  };
+  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+  while (sp) {
+    const q = stack[--sp];
+    const y = (q / w) | 0, x = q - y * w;
+    if (x > 0) push(q - 1);
+    if (x < w - 1) push(q + 1);
+    if (y > 0) push(q - w);
+    if (y < h - 1) push(q + w);
+  }
+  const reach = new Set();
+  for (let p = 0; p < n; p++) if (seen[p]) reach.add(labels[p]);
+  return reach;
+}
+
+
+// Every closed pocket sealed by a ridge is a candidate copper shape. The big
+// outer area (the substrate, touching the frame) is not. Inside a pad there may
+// be a second pocket (an annular ring's centre, a via mouth): that one is drawn
+// as the pad's HOLE, not as a shape of its own — the tracer already emits it as
+// an inner loop because the pad is drawn around it.
+function trTopCycles(ridge, w, h, minArea) {
+  const labels = new Int32Array(w * h);
+  const stack = new Int32Array(w * h);
+  const out = [];
+  let next = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x;
+      if (ridge[p] || labels[p]) continue;
+      next++;
+      let sp = 0; stack[sp++] = p; labels[p] = next;
+      let area = 0, touch = false;
+      let minX = w, maxX = 0, minY = h, maxY = 0;
+      while (sp) {
+        const q = stack[--sp];
+        const yy = (q / w) | 0, xx = q - yy * w;
+        area++;
+        if (xx === 0 || yy === 0 || xx === w - 1 || yy === h - 1) touch = true;
+        if (xx < minX) minX = xx; if (xx > maxX) maxX = xx;
+        if (yy < minY) minY = yy; if (yy > maxY) maxY = yy;
+        if (xx > 0 && !ridge[q - 1] && !labels[q - 1]) { labels[q - 1] = next; stack[sp++] = q - 1; }
+        if (xx < w - 1 && !ridge[q + 1] && !labels[q + 1]) { labels[q + 1] = next; stack[sp++] = q + 1; }
+        if (yy > 0 && !ridge[q - w] && !labels[q - w]) { labels[q - w] = next; stack[sp++] = q - w; }
+        if (yy < h - 1 && !ridge[q + w] && !labels[q + w]) { labels[q + w] = next; stack[sp++] = q + w; }
+      }
+      out.push({ id: next, area, touch, minX, maxX, minY, maxY });
+    }
+  }
+  return { labels, regions: out, minArea };
 }
 
 function polyArea(loop) {
@@ -4388,6 +4743,7 @@ function trSetMode(mode) {
     b.classList.toggle("active-mode", b.dataset.trmode === mode));
   trInvalidate();
 }
+
 document.querySelectorAll("#trModeRow .btn").forEach(b => {
   b.onclick = () => trSetMode(b.dataset.trmode);
 });
@@ -4450,7 +4806,9 @@ function trHandlePick(ip) {
   } else {
     trState.sample = s;
     trSetSampleThumb(1);
-    if (trState.mode !== "luma") {
+    // the pick only says WHICH side is copper; the edge threshold is a
+    // contrast value, it must not be replaced by a colour threshold
+    if (trState.mode === "colour-threshold") {
       trState.thresh = suggestThreshold(ip.x, ip.y, s);
       const th = document.getElementById("trThresh");
       const tv = document.getElementById("trThreshVal");
@@ -4473,6 +4831,8 @@ const trSlider = (id, out, key, parse) => {
   };
 };
 trSlider("trThresh", "trThreshVal", "thresh");
+trSlider("trSharp", "trSharpVal", "sharpness");
+trSlider("trCopperPct", "trCopperPctVal", "copperPct");
 trSlider("trClose", "trCloseVal", "close");
 trSlider("trMinArea", "trMinAreaVal", "minArea");
 trSlider("trSimplify", "trSimplifyVal", "simplify", parseFloat);
@@ -4654,6 +5014,18 @@ const I18N = {
     "tool.paint.tip": "Малювання — пензель, лінія, заливка, гумка (M)",
     "tool.trace": "Контури",
     "tool.trace.tip": "Контури — обвести доріжки й отвори по краях (T)",
+    "trace.mode.luma.tip": "За яскравістю — добре для ч/б скану",
+    "trace.mode.color.tip": "За контрастом кольору — найкраще для фото",
+    "trace.mode.color": "Контраст",
+    "trace.mode.adaptive.tip": "Старий спосіб: поріг кольору",
+    "trace.mode.adaptive": "Поріг",
+    "trace.contrastHint": "Контраст — шукає різкий перепад кольору на межі міді й фону. Не залежить від нерівного освітлення.",
+    "trace.thresh": "Сила контрасту",
+    "trace.threshHint": "Поріг перепаду. Нижче — бере і слабкі межі в тіні. Вище — лише різкі.",
+    "trace.sharp": "Ширина переходу, px",
+    "trace.sharpHint": "Як далеко дивитись убік при пошуку перепаду. 1 — різкий край. 2–3 — розмите фото.",
+    "trace.copperPct": "Скільки міді на платі, %",
+    "trace.copperPctHint": "Контур лише ділить площу. Щоб знати, яка сторона — мідь, треба оцінити її частку.",
     "trace.hint": "Знаходить доріжки та отвори як окремі контури по їхніх краях: виділяє мідь, обводить кожну фігуру зовнішнім і внутрішнім контуром, відкидає шум і спрощує лінію.",
     "trace.samples": "Зразок міді",
     "trace.samplesCan2": "(можна два)",
@@ -4941,6 +5313,18 @@ const I18N = {
     "tool.paint.tip": "Paint — brush, line, fill, eraser (M)",
     "tool.trace": "Trace",
     "tool.trace.tip": "Trace — outline traces and holes along their edges (T)",
+    "trace.mode.luma.tip": "By brightness — good for a B/W scan",
+    "trace.mode.color.tip": "By colour contrast — best for photos",
+    "trace.mode.color": "Contrast",
+    "trace.mode.adaptive.tip": "Old way: colour threshold",
+    "trace.mode.adaptive": "Threshold",
+    "trace.contrastHint": "Contrast looks for the sharp colour jump on the copper/substrate border. Uneven lighting does not matter.",
+    "trace.thresh": "Contrast strength",
+    "trace.threshHint": "Jump threshold. Lower takes faint borders in shadow, higher keeps only sharp ones.",
+    "trace.sharp": "Edge width, px",
+    "trace.sharpHint": "How far to look sideways for the jump. 1 — sharp edge. 2-3 — a blurry photo.",
+    "trace.copperPct": "How much copper, %",
+    "trace.copperPctHint": "The contour only splits the area. To know which side is copper, estimate its share.",
     "trace.hint": "Finds traces and holes as separate contours along their edges: isolates copper, outlines every shape with an outer and inner border, drops noise and simplifies the line.",
     "trace.samples": "Copper sample",
     "trace.samplesCan2": "(two allowed)",
