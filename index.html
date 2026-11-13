@@ -947,7 +947,21 @@
         </div>
         <button class="btn primary" id="exportPdfBtn" style="margin-top:4px;" data-i18n="exp.pdf">Експорт PDF</button>
 
+        <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+          <label data-i18n="exp.svg">SVG — вектор, реальні розміри</label>
+          <label class="chk" style="margin:6px 0 0"><input type="checkbox" id="svgInvert"> <span data-i18n="exp.svginvert">Інверсія (біле на чорному)</span></label>
+          <label class="chk"><input type="checkbox" id="svgStencil"> <span data-i18n="exp.svgstencil">Трафарет — контур замість заливки</span></label>
+          <label class="chk"><input type="checkbox" id="svgSpecks" checked> <span data-i18n="exp.svgclean">Видаляти дрібні деталі</span></label>
+          <div class="slider-row" id="svgSpecksRow">
+            <input type="range" id="svgMinArea" min="1" max="60" step="1" value="3">
+            <output id="svgMinAreaVal">3</output>
+          </div>
+          <p class="hint" style="margin:2px 0 0" data-i18n="exp.svgcleanhint">Прибирає піщинки й обривки, менші за вказану сторону в px.</p>
+        </div>
+        <button class="btn primary" id="exportSvgBtn" style="margin-top:6px;" data-i18n="exp.svgbtn">Експорт SVG</button>
+
         <p class="status" id="exportStatus"></p>
+        <p class="status" id="exportSize"></p>
       </div>
 
     </div>
@@ -3095,6 +3109,20 @@ async function getProcessedCanvas(targetDPI) {
   return final;
 }
 
+/* ---- actual size readout for every export ---- */
+function exportSizeText(pxW, pxH, mmW, mmH) {
+  const px = `${pxW} × ${pxH} px`;
+  if (!(mmW > 0) || !(mmH > 0)) return px + " · " + t("msg.sizeUnknown2");
+  const mm = `${mmW.toFixed(2)} × ${mmH.toFixed(2)}`;
+  const inch = `${(mmW / 25.4).toFixed(3)} × ${(mmH / 25.4).toFixed(3)}`;
+  return `${px} · ${mm}${t("msg.mm")} · ${inch}${t("msg.inch")}`;
+}
+
+function showExportSize(pxW, pxH, mmW, mmH) {
+  const el = document.getElementById("exportSize");
+  if (el) el.textContent = t("exp.size") + exportSizeText(pxW, pxH, mmW, mmH);
+}
+
 document.getElementById("exportPngBtn").onclick = async () => {
   if (!doc) { toast(t("msg.noFile")); return; }
   const st = document.getElementById("exportStatus");
@@ -3107,6 +3135,9 @@ document.getElementById("exportPngBtn").onclick = async () => {
     a.href = out.toDataURL("image/png");
     a.click();
     st.textContent = t("msg.perpDone") + `${out.width}×${out.height}px`;
+    showExportSize(out.width, out.height,
+      doc.pxPerMm ? out.width / (dpi / 25.4) : (out.width / dpi) * 25.4,
+      doc.pxPerMm ? out.height / (dpi / 25.4) : (out.height / dpi) * 25.4);
   } catch (e) { st.textContent = t("msg.error") + e.message; }
 };
 
@@ -3130,6 +3161,149 @@ document.getElementById("exportPdfBtn").onclick = async () => {
     a.href = URL.createObjectURL(new Blob([await pdfDoc.save()], { type: "application/pdf" }));
     a.click();
     st.textContent = t("msg.perpDone") + `${pageW.toFixed(1)}×${pageH.toFixed(1)} pt`;
+    showExportSize(out.width, out.height, (pageW / 72) * 25.4, (pageH / 72) * 25.4);
+  } catch (e) { st.textContent = t("msg.error") + e.message; }
+};
+
+/* ============================================================
+   SVG EXPORT — vectorise the engraving bitmap
+   ------------------------------------------------------------
+   The bitmap is thresholded to on/off, every connected shape is traced
+   along its pixel edges and written as a real path in millimetres, so the
+   SVG opens at the board's actual size in any vector program.
+   Options:
+     invert   — swap what is engraved (for negative/stencil work)
+     stencil  — outline only instead of solid fill
+     specks   — drop details smaller than N px (and close pinholes)
+   ============================================================ */
+function svgSpeckMin() {
+  const el = document.getElementById("svgMinArea");
+  return el ? Math.max(0, parseInt(el.value, 10) || 0) : 0;
+}
+
+const svgMinArea = document.getElementById("svgMinArea");
+const svgMinAreaVal = document.getElementById("svgMinAreaVal");
+if (svgMinArea) svgMinArea.oninput = () => { if (svgMinAreaVal) svgMinAreaVal.textContent = svgMinArea.value; };
+const svgSpecksChk = document.getElementById("svgSpecks");
+if (svgSpecksChk) svgSpecksChk.onchange = () => {
+  const row = document.getElementById("svgSpecksRow");
+  if (row) row.style.opacity = svgSpecksChk.checked ? "1" : ".45";
+  if (svgMinArea) svgMinArea.disabled = !svgSpecksChk.checked;
+};
+
+// on/off map of the engraving: black = engraved
+function svgMaskFromDoc(clean, minSide) {
+  const w = doc.canvas.width, h = doc.canvas.height;
+  const data = doc.canvas.getContext("2d", { willReadFrequently: true })
+    .getImageData(0, 0, w, h).data;
+  const mask = new Uint8Array(w * h);
+  for (let p = 0; p < w * h; p++) {
+    const i = p * 4;
+    const v = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    mask[p] = v < 128 ? 1 : 0;
+  }
+  if (clean && minSide > 1) {
+    // drop shapes whose bounding box is thinner than minSide, and close
+    // pinholes of the same size: both are dust, not geometry
+    const { labels, blobs } = trLabel(mask, w, h);
+    const keep = new Uint8Array(w * h);
+    for (const b of blobs) {
+      const bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1;
+      if (Math.min(bw, bh) < minSide) continue;
+      for (let y = b.minY; y <= b.maxY; y++)
+        for (let x = b.minX; x <= b.maxX; x++) {
+          const p = y * w + x;
+          if (labels[p] === b.id) keep[p] = 1;
+        }
+    }
+    // re-fill tiny holes inside kept shapes
+    const inv = new Uint8Array(w * h);
+    for (let p = 0; p < w * h; p++) inv[p] = keep[p] ? 0 : 1;
+    const h2 = trLabel(inv, w, h);
+    for (const b of h2.blobs) {
+      if (b.minX === 0 || b.minY === 0 || b.maxX === w - 1 || b.maxY === h - 1) continue;
+      const bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1;
+      if (Math.min(bw, bh) >= minSide) continue;
+      for (let y = b.minY; y <= b.maxY; y++)
+        for (let x = b.minX; x <= b.maxX; x++) {
+          const p = y * w + x;
+          if (h2.labels[p] === b.id) keep[p] = 1;
+        }
+    }
+    return { mask: keep, w, h };
+  }
+  return { mask, w, h };
+}
+
+function svgBuild() {
+  const ppm = doc.pxPerMm || 0;
+  const invert = document.getElementById("svgInvert").checked;
+  const stencil = document.getElementById("svgStencil").checked;
+  const clean = document.getElementById("svgSpecks").checked;
+  const minSide = svgSpeckMin();
+
+  const { mask, w, h } = svgMaskFromDoc(clean, minSide);
+
+  // engraved pixels: normally black ones; inverted swaps the role
+  const engraved = new Uint8Array(w * h);
+  for (let p = 0; p < w * h; p++) engraved[p] = invert ? (mask[p] ? 0 : 1) : mask[p];
+
+  // millimetres per pixel — falls back to a sane 10 px/mm if unscaled
+  const mmPerPx = ppm > 0 ? 1 / ppm : 0.1;
+  const W = (w * mmPerPx).toFixed(3);
+  const H = (h * mmPerPx).toFixed(3);
+
+  const { labels, blobs } = trLabel(engraved, w, h);
+  let d = "";
+  let shapes = 0;
+  for (const b of blobs) {
+    const loops = trTraceEdges(labels, w, h, labels, b.id);
+    if (!loops.length) continue;
+    shapes++;
+    for (const l of loops) {
+      const pts = trSimplify(trLoopToPoints(l), 0.35);
+      if (pts.length < 3) continue;
+      d += "M";
+      for (let i = 0; i < pts.length; i++) {
+        const x = (pts[i].x * mmPerPx).toFixed(3);
+        const y = (pts[i].y * mmPerPx).toFixed(3);
+        d += (i ? "L" : "") + x + " " + y;
+      }
+      d += "Z";
+    }
+  }
+
+  const paint = stencil
+    ? `fill="none" stroke="#000" stroke-width="${Math.max(0.05, mmPerPx).toFixed(3)}"`
+    : `fill="#000" fill-rule="evenodd"`;
+  return {
+    svg: `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}">
+<title>PCB engraving</title>
+<desc>${w} x ${h} px, ${W} x ${H} mm, ${ppm ? ppm.toFixed(3) : "scale unknown"} px/mm</desc>
+<path ${paint} d="${d}"/>
+</svg>`,
+    mmW: w * mmPerPx,
+    mmH: h * mmPerPx,
+    pxW: w, pxH: h,
+    shapes,
+  };
+}
+
+document.getElementById("exportSvgBtn").onclick = () => {
+  if (!doc) { toast(t("msg.noFile")); return; }
+  const st = document.getElementById("exportStatus");
+  st.textContent = t("msg.svgRender");
+  try {
+    const r = svgBuild();
+    const a = document.createElement("a");
+    a.download = `pcb_${r.mmW.toFixed(1)}x${r.mmH.toFixed(1)}mm.svg`;
+    a.href = URL.createObjectURL(new Blob([r.svg], { type: "image/svg+xml" }));
+    a.click();
+    const holes = doc.pxPerMm ? 0 : 1;
+    st.textContent = t("msg.perpDone") + `${r.shapes} ${t("exp.shapes")}` +
+      (holes ? " · " + t("msg.noScaleWarn") : "");
+    showExportSize(r.pxW, r.pxH, r.mmW, r.mmH);
   } catch (e) { st.textContent = t("msg.error") + e.message; }
 };
 
@@ -5209,6 +5383,17 @@ const I18N = {
     "exp.pdfDpi": "PDF — DPI растру",
     "exp.png": "Експорт PNG",
     "exp.pdf": "Експорт PDF",
+    "exp.size": "Фактичний розмір: ",
+    "exp.svg": "SVG — вектор, реальні розміри",
+    "exp.svginvert": "Інверсія (біле на чорному)",
+    "exp.svgstencil": "Трафарет — контур замість заливки",
+    "exp.svgclean": "Видаляти дрібні деталі",
+    "exp.svgcleanhint": "Прибирає піщинки й обривки, менші за вказану сторону в px.",
+    "exp.svgbtn": "Експорт SVG",
+    "exp.shapes": "контурів",
+    "msg.svgRender": "Векторизація SVG…",
+    "msg.sizeUnknown2": "масштаб не визначено",
+    "msg.noScaleWarn": "масштаб не визначено — взято 10 px/мм",
     "dpi.300.preview": "300 DPI (прев'ю)",
     "dpi.1000": "1000 DPI (якісно)",
     "dpi.1200": "1200 DPI (гравера)",
@@ -5288,6 +5473,7 @@ const I18N = {
     "msg.dpiLabel": " DPI",
     "msg.px": " px",
     "msg.mm": " мм",
+    "msg.inch": "″",
     "msg.percent": "%",
   },
 
@@ -5508,6 +5694,17 @@ const I18N = {
     "exp.pdfDpi": "PDF — raster DPI",
     "exp.png": "Export PNG",
     "exp.pdf": "Export PDF",
+    "exp.size": "Actual size: ",
+    "exp.svg": "SVG — vector, real size",
+    "exp.svginvert": "Invert (white on black)",
+    "exp.svgstencil": "Stencil — outline instead of fill",
+    "exp.svgclean": "Remove small details",
+    "exp.svgcleanhint": "Drops specks and fragments thinner than the given side in px.",
+    "exp.svgbtn": "Export SVG",
+    "exp.shapes": "contours",
+    "msg.svgRender": "Vectorising SVG…",
+    "msg.sizeUnknown2": "scale unknown",
+    "msg.noScaleWarn": "scale unknown - assumed 10 px/mm",
     "dpi.300.preview": "300 DPI (preview)",
     "dpi.1000": "1000 DPI (high)",
     "dpi.1200": "1200 DPI (engraver)",
@@ -5587,6 +5784,7 @@ const I18N = {
     "msg.dpiLabel": " DPI",
     "msg.px": " px",
     "msg.mm": " mm",
+    "msg.inch": "″",
     "msg.percent": "%",
   },
 };
