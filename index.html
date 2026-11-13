@@ -362,6 +362,10 @@
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
       <span data-i18n="tool.binary">Бінаризація</span>
     </button>
+    <button class="rail-btn" data-tool="trace" data-i18n-tip="tool.trace.tip" title="Контури — обвести доріжки й отвори по краях (T)">
+      <svg viewBox="0 0 24 24"><path d="M4 16c0-4 3-7 7-7s3 3 6 3a3 3 0 0 0 0-6"/><path d="M4 20h16"/><circle cx="4" cy="16" r="1.6"/><circle cx="11" cy="9" r="1.6"/></svg>
+      <span data-i18n="tool.trace">Контури</span>
+    </button>
     <button class="rail-btn" data-tool="paint" data-i18n-tip="tool.paint.tip" title="Малювання — пензель, лінія, заливка, гумка (M)">
       <svg viewBox="0 0 24 24"><path d="M4 20l1-5 10-10 4 4-10 10z"/><path d="M13 7l4 4"/><path d="M18 4l2 2"/></svg>
       <span data-i18n="tool.paint">Малювання</span>
@@ -706,6 +710,103 @@
           <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
           <span data-i18n="bin.preview">Оригінал</span>
         </button>
+      </div>
+
+      <div class="pane" data-pane="trace">
+        <p class="hint" data-i18n="trace.hint">Знаходить доріжки та отвори як окремі контури по їхніх краях: спершу виділяє мідь, потім обводить кожну фігуру зовнішнім і внутрішнім контуром, відкидає дрібний шум і спрощує лінію.</p>
+
+        <div class="field">
+          <label><span data-i18n="trace.samples">Зразок міді</span> <span style="text-transform:none;font-weight:400" data-i18n="trace.samplesCan2">(можна два)</span></label>
+          <div class="row2">
+            <button class="btn round-btn" id="trPickBtn" style="flex:1" data-i18n-tip="trace.pick.tip" title="Взяти колір міді піпеткою">
+              <svg viewBox="0 0 24 24"><path d="M15 3l6 6"/><path d="M17 5l-9 9-3 6 6-3 9-9z"/></svg>
+              <span data-i18n="trace.pick">Піпетка</span>
+            </button>
+            <button class="btn round-btn icon-btn" id="trPickReset" data-i18n-tip="trace.pickReset.tip" title="Скинути обидва зразки" disabled>
+              <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div id="trSample" class="bin-sample">
+            <span class="bin-thumb" id="trThumb"></span>
+            <span class="bin-meta" id="trMeta" data-i18n="trace.none">не вибрано</span>
+          </div>
+          <div id="trSample2Row" class="bin-sample" style="display:none">
+            <span class="bin-thumb" id="trThumb2"></span>
+            <span class="bin-meta" id="trMeta2">—</span>
+            <button class="bin-x" id="trPickReset2" data-i18n-tip="trace.pickReset2.tip" title="Прибрати другий зразок">✕</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label data-i18n="trace.mode">Режим відділення</label>
+          <div class="row3" id="trModeRow">
+            <button class="btn round-btn" data-trmode="luma" data-i18n-tip="trace.mode.luma.tip" title="За яскравістю (чорне/біле)">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
+              <span data-i18n="trace.mode.luma">Світло</span>
+            </button>
+            <button class="btn round-btn" data-trmode="color" data-i18n-tip="trace.mode.color.tip" title="За кольором (відтінок + насиченість)">
+              <svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6"/></svg>
+              <span data-i18n="trace.mode.color">Колір</span>
+            </button>
+            <button class="btn round-btn" data-trmode="adaptive" data-i18n-tip="trace.mode.adaptive.tip" title="Локальна адаптація — рівномірно на нерівному фоні">
+              <svg viewBox="0 0 24 24"><path d="M4 18l5-10 4 8 3-5 4 7"/></svg>
+              <span data-i18n="trace.mode.adaptive">Авто</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label data-i18n="trace.thresh">Поріг міді</label>
+          <div class="slider-row">
+            <input type="range" id="trThresh" min="0" max="255" step="1" value="128">
+            <output id="trThreshVal">128</output>
+          </div>
+          <p class="hint" style="margin:6px 0 0" data-i18n="trace.threshHint">Піпетка підбирає поріг сама. Повзунок — коли треба взяти більше або менше.</p>
+        </div>
+
+        <div class="field">
+          <label data-i18n="trace.close">Заповнення тріщин у міді, px</label>
+          <div class="slider-row">
+            <input type="range" id="trClose" min="0" max="8" step="1" value="1">
+            <output id="trCloseVal">1</output>
+          </div>
+          <p class="hint" style="margin:6px 0 0" data-i18n="trace.closeHint">Мідь на фото подряпана, з піщинками. Заповнення зшиває дрібні дірки, щоб контур не розсипався.</p>
+        </div>
+
+        <div class="field">
+          <label data-i18n="trace.minArea">Мінімальна площа фігури, px²</label>
+          <div class="slider-row">
+            <input type="range" id="trMinArea" min="4" max="400" step="4" value="60">
+            <output id="trMinAreaVal">60</output>
+          </div>
+        </div>
+
+        <div class="field">
+          <label data-i18n="trace.simplify">Спрощення лінії, px</label>
+          <div class="slider-row">
+            <input type="range" id="trSimplify" min="0" max="4" step="0.25" value="0.75">
+            <output id="trSimplifyVal">0.75</output>
+          </div>
+          <p class="hint" style="margin:6px 0 0" data-i18n="trace.simplifyHint">0 — обводити точнісінько по пікселях. Більше — рівніші лінії, менше точок.</p>
+        </div>
+
+        <div class="field">
+          <label data-i18n="trace.stroke">Заливка контуру, px</label>
+          <div class="slider-row">
+            <input type="range" id="trStroke" min="1" max="6" step="1" value="1">
+            <output id="trStrokeVal">1</output>
+          </div>
+        </div>
+
+        <label class="chk"><input type="checkbox" id="trHoles" checked> <span data-i18n="trace.onlyEdges">Отвори — теж контуром</span></label>
+        <label class="chk"><input type="checkbox" id="trFillMode"> <span data-i18n="trace.fillMode">Суцільна заливка замість ліній</span></label>
+
+        <div class="size-badge" style="margin-top:12px">
+          <div class="big" id="trCount">—</div>
+          <div class="sub" data-i18n="trace.count">контурів знайдено</div>
+        </div>
+
+        <button class="btn primary" id="trApply" style="margin-top:10px" data-i18n="trace.apply">Застосувати контури</button>
       </div>
 
       <div class="pane" data-pane="paint">
@@ -1432,7 +1533,7 @@ const toolButtons = [...document.querySelectorAll(".rail-btn[data-tool]")];
 toolButtons.forEach(b => b.onclick = () => switchTool(b.dataset.tool));
 
 function switchTool(name) {
-  if (!["import","crop","perspective","scale","detect","binary","paint","export"].includes(name)) return;
+  if (!["import","crop","perspective","scale","detect","binary","trace","paint","export"].includes(name)) return;
   // leaving the painter mid-stroke must not leave a dangling draft
   if (tool === "paint" && name !== "paint") { paint.draft = null; paint.hover = null; }
   tool = name;
@@ -1443,6 +1544,10 @@ function switchTool(name) {
   // leaving the binarizer: drop the eyedropper so it cannot fire elsewhere
   if (name !== "binary" && binState.picking) {
     binState.picking = false;
+    document.body.classList.remove("picking-trace");
+  }
+  if (name !== "trace" && trState.picking) {
+    trState.picking = false;
     document.body.classList.remove("picking-trace");
   }
 
@@ -1457,6 +1562,8 @@ function switchTool(name) {
       updateAlignButton();
     }
     if (name === "binary") { binInvalidate(); }
+    // the trace tool always re-runs on entry: the bitmap may have changed
+    if (name === "trace") { trInvalidate(); }
     // the scale tool always opens showing the current real size, never what
     // the inputs happened to hold from a previous visit
     if (name === "scale") { syncScaleFields(); updateScaleTwoButton(); }
@@ -1634,6 +1741,11 @@ function onDown(e) {
     return;
   }
 
+  if (tool === "trace") {
+    if (trState.picking) trHandlePick(ip);
+    return;
+  }
+
   if (tool === "paint") {
     // Alt = eyedropper: adopt the colour under the cursor as black or white
     if (e.altKey) {
@@ -1691,6 +1803,8 @@ function onMove(e) {
       if (pendingComponent && pendingComponent.pickType !== "point") updateHolePreview(ip);
     } else if (tool === "binary") {
       setCursor(binState.picking ? "crosshair" : "default");
+    } else if (tool === "trace") {
+      setCursor(trState.picking ? "crosshair" : "default");
     } else if (tool === "paint") {
       // keep the brush ring glued to the cursor and redraw the overlay only
       paint.hover = { x: ip.x, y: ip.y };
@@ -3371,8 +3485,364 @@ function drawBinaryPreview() {
 }
 
 /* ============================================================
-   PAINT — manual bitmap repair (brush / line / fill / eraser)
+   TRACE — copper regions as real closed contours
+   Picks copper out of the photo, splits it into connected shapes,
+   walks the pixel EDGES of every shape (outer border + inner holes),
+   simplifies the polyline and strokes or fills it. The result is a
+   vector-clean outline, not a threshold mask.
    ============================================================ */
+const trState = {
+  mode: "color",
+  sample: null,
+  sample2: null,
+  thresh: 128,
+  close: 1,
+  minArea: 60,
+  simplify: 0.75,
+  stroke: 1,
+  edgesOnly: true,
+  fillMode: false,
+  picking: false,
+  result: null,
+  count: 0,
+  dirty: true,
+};
+
+// ---- 1. copper mask (same colour maths as the binarizer) ----
+function trBuildMask(src) {
+  const w = src.width, h = src.height;
+  const data = src.getContext("2d").getImageData(0, 0, w, h).data;
+  const n = w * h;
+  const gray = new Float32Array(n);
+  const distF = new Float32Array(n);
+  const s = trState.sample, s2 = trState.sample2;
+  const T = trState.thresh;
+  const mode = trState.mode;
+
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    gray[p] = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (s) {
+      let d = colorDistance(r, g, b, s.r, s.g, s.b);
+      if (s2) d = Math.min(d, colorDistance(r, g, b, s2.r, s2.g, s2.b));
+      distF[p] = d;
+    }
+  }
+
+  // local mean for the adaptive mode, computed once over the whole frame
+  let localMean = null;
+  if (mode === "adaptive") {
+    const r = Math.max(4, Math.round(Math.min(w, h) / 40));
+    const src8 = new Float32Array(n);
+    for (let p = 0; p < n; p++) src8[p] = s ? distF[p] : gray[p];
+    localMean = boxBlurFast(src8, w, h, r);
+  }
+
+  const mask = new Uint8Array(n);
+  for (let p = 0; p < n; p++) {
+    let on;
+    if (mode === "adaptive") {
+      const ref = localMean[p] * 255;
+      on = s ? (distF[p] <= Math.max(1, ref + (T - 128) * 0.6) ? 1 : 0)
+             : (gray[p] < ref + (T - 128) * 0.6 ? 1 : 0);
+    } else {
+      on = s ? (distF[p] <= T ? 1 : 0) : (gray[p] < T ? 1 : 0);
+    }
+    mask[p] = on;
+  }
+  return { mask, w, h };
+}
+
+// ---- 2. morphological closing: fill hairline cracks inside copper ----
+function trDilate(mask, w, h, r) {
+  let cur = mask;
+  for (let it = 0; it < r; it++) {
+    const nx = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      const up = y > 0 ? row - w : -1, dn = y < h - 1 ? row + w : -1;
+      for (let x = 0; x < w; x++) {
+        const p = row + x;
+        if (cur[p]) { nx[p] = 1; continue; }
+        if ((x > 0 && cur[p - 1]) || (x < w - 1 && cur[p + 1]) ||
+            (up >= 0 && cur[up + x]) || (dn >= 0 && cur[dn + x])) nx[p] = 1;
+      }
+    }
+    cur = nx;
+  }
+  return cur;
+}
+function trErode(mask, w, h, r) {
+  let cur = mask;
+  for (let it = 0; it < r; it++) {
+    const nx = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      const up = y > 0 ? row - w : -1, dn = y < h - 1 ? row + w : -1;
+      for (let x = 0; x < w; x++) {
+        const p = row + x;
+        if (!cur[p]) { nx[p] = 0; continue; }
+        nx[p] = ((x > 0 && cur[p - 1]) && (x < w - 1 && cur[p + 1]) &&
+                 (up >= 0 && cur[up + x]) && (dn >= 0 && cur[dn + x])) ? 1 : 0;
+      }
+    }
+    cur = nx;
+  }
+  return cur;
+}
+
+// ---- 3. connected components (4-connectivity, iterative flood) ----
+function trLabel(mask, w, h) {
+  const labels = new Int32Array(w * h);
+  const stack = new Int32Array(w * h);
+  const blobs = [];
+  let next = 0;
+  for (let p = 0; p < w * h; p++) {
+    if (!mask[p] || labels[p]) continue;
+    next++;
+    let sp = 0;
+    stack[sp++] = p;
+    labels[p] = next;
+    let area = 0, minX = w, maxX = 0, minY = h, maxY = 0;
+    while (sp) {
+      const q = stack[--sp];
+      const y = (q / w) | 0, x = q - y * w;
+      area++;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (x > 0 && mask[q - 1] && !labels[q - 1]) { labels[q - 1] = next; stack[sp++] = q - 1; }
+      if (x < w - 1 && mask[q + 1] && !labels[q + 1]) { labels[q + 1] = next; stack[sp++] = q + 1; }
+      if (y > 0 && mask[q - w] && !labels[q - w]) { labels[q - w] = next; stack[sp++] = q - w; }
+      if (y < h - 1 && mask[q + w] && !labels[q + w]) { labels[q + w] = next; stack[sp++] = q + w; }
+    }
+    blobs.push({ id: next, area, minX, maxX, minY, maxY });
+  }
+  return { labels, blobs };
+}
+
+// ---- 4. boundary tracing along PIXEL EDGES (Moore for outer, square for holes)
+// The border of a pixel set is a set of unit segments between a filled and an
+// empty pixel. Following those segments yields exact closed polygons that
+// sit on the true edge instead of on pixel centres.
+function trTraceEdges(mask, w, h, idMap, id) {
+  // count how many of the 4 neighbours belong to another id
+  const inside = (x, y) => x >= 0 && y >= 0 && x < w && y < h && idMap[y * w + x] === id;
+  // oriented edges: direction 0=E 1=S 2=W 3=N, each tuple kept as key -> count
+  const segs = [];
+  const key = (x, y, d) => ((y * (w + 1) + x) * 4 + d);
+  const map = new Map();
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!inside(x, y)) continue;
+      // keep the interior on the LEFT: E(0), S(1), W(2), N(3)
+      if (!inside(x, y - 1)) addSeg(key(x, y, 0), x, y, 0);
+      if (!inside(x + 1, y)) addSeg(key(x + 1, y, 1), x + 1, y, 1);
+      if (!inside(x, y + 1)) addSeg(key(x + 1, y + 1, 2), x + 1, y + 1, 2);
+      if (!inside(x - 1, y)) addSeg(key(x, y + 1, 3), x, y + 1, 3);
+    }
+  }
+  function addSeg(k, x, y, d) {
+    const e = map.get(k);
+    if (e) { e.n++; return; }
+    const s = { x, y, d, n: 1 };
+    map.set(k, s);
+    segs.push(s);
+  }
+  if (!segs.length) return [];
+
+  // adjacency: a segment continues where its end point matches another start
+  const byStart = new Map();
+  for (const s of segs) {
+    const k = s.y * (w + 1) + s.x;
+    let arr = byStart.get(k);
+    if (!arr) { arr = []; byStart.set(k, arr); }
+    arr.push(s);
+  }
+  const endOf = (s) => {
+    switch (s.d) {
+      case 0: return { x: s.x + 1, y: s.y };
+      case 1: return { x: s.x, y: s.y + 1 };
+      case 2: return { x: s.x - 1, y: s.y };
+      default: return { x: s.x, y: s.y - 1 };
+    }
+  };
+
+  const used = new Set();
+  const loops = [];
+  for (const start of segs) {
+    if (used.has(start)) continue;
+    const loop = [];
+    let cur = start;
+    let guard = 0;
+    while (cur && !used.has(cur) && guard++ < segs.length + 8) {
+      used.add(cur);
+      loop.push({ x: cur.x, y: cur.y, d: cur.d });
+      const e = endOf(cur);
+      const cands = byStart.get(e.y * (w + 1) + e.x) || [];
+      // At a shared corner prefer the sharpest LEFT turn (keep the fill on the
+      // left). If no left option exists we are at a hole corner: the loop must
+      // turn RIGHT, otherwise the hole breaks into two open chains.
+      let nxt = null, bestLeft = -1, bestRight = 99;
+      for (const c of cands) {
+        if (used.has(c)) continue;
+        const turn = ((c.d - cur.d) + 4) % 4;   // 0 str, 1 left, 3 right
+        if (turn === 3) { if (bestRight === 99) bestRight = 0, nxt = nxt || c; }
+        else if (turn > bestLeft) { bestLeft = turn; nxt = c; }
+      }
+      cur = nxt;
+    }
+    if (loop.length > 7) loops.push(loop);
+  }
+  return loops;
+}
+
+// turn an edge loop into outline points (corners only, duplicate-collapsed)
+function trLoopToPoints(loop) {
+  const pts = [];
+  const endOf = (s) => {
+    switch (s.d) {
+      case 0: return { x: s.x + 1, y: s.y };
+      case 1: return { x: s.x, y: s.y + 1 };
+      case 2: return { x: s.x - 1, y: s.y };
+      default: return { x: s.x, y: s.y - 1 };
+    }
+  };
+  pts.push({ x: loop[0].x, y: loop[0].y });
+  for (let i = 0; i < loop.length; i++) {
+    const cur = loop[i], nxt = loop[(i + 1) % loop.length];
+    if (!nxt || nxt.d !== cur.d) pts.push(endOf(cur));
+  }
+  // drop the closing duplicate
+  if (pts.length > 1) {
+    const a = pts[0], b = pts[pts.length - 1];
+    if (a.x === b.x && a.y === b.y) pts.pop();
+  }
+  return pts;
+}
+
+// Ramer-Douglas-Peucker
+function trSimplify(pts, eps) {
+  if (eps <= 0 || pts.length < 4) return pts;
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    if (b - a < 2) continue;
+    const p = pts[a], q = pts[b];
+    const dx = q.x - p.x, dy = q.y - p.y;
+    const len = Math.hypot(dx, dy) || 1e-9;
+    let best = -1, bestD = 0;
+    for (let i = a + 1; i < b; i++) {
+      const r = pts[i];
+      const d = Math.abs((r.x - p.x) * dy - (r.y - p.y) * dx) / len;
+      if (d > bestD) { bestD = d; best = i; }
+    }
+    if (bestD > eps) { keep[best] = 1; stack.push([a, best], [best, b]); }
+  }
+  const out = [];
+  for (let i = 0; i < pts.length; i++) if (keep[i]) out.push(pts[i]);
+  return out.length >= 3 ? out : pts;
+}
+
+// ---- 5. the whole pipeline → canvas ----
+function trBuild() {
+  ensureBase();
+  const src = doc.base;
+  const w = src.width, h = src.height;
+  const { mask } = trBuildMask(src);
+  const cl = trState.close | 0;
+  const work = cl > 0 ? trErode(trDilate(mask, w, h, cl), w, h, cl) : mask;
+  const { labels, blobs } = trLabel(work, w, h);
+  const minA = Math.max(1, trState.minArea | 0);
+
+  const out = document.createElement("canvas");
+  out.width = w; out.height = h;
+  const oc = out.getContext("2d");
+  oc.fillStyle = "#fff";
+  oc.fillRect(0, 0, w, h);
+  oc.fillStyle = "#000";
+  oc.strokeStyle = "#000";
+  oc.lineWidth = Math.max(1, trState.stroke | 0);
+  oc.lineJoin = "round";
+  oc.lineCap = "round";
+
+  const fill = trState.fillMode;
+  const wantHoles = trState.edgesOnly;
+  let drawn = 0;
+
+  for (const blob of blobs) {
+    if (blob.area < minA) continue;
+    // label the whole image at once is expensive; trace per blob window
+    const loops = trTraceEdges(work, w, h, labels, blob.id);
+    if (!loops.length) continue;
+    const polys = loops.map(l => {
+      // depth of a loop: even-odd nesting decides outer border vs hole
+      const pts = trSimplify(trLoopToPoints(l), trState.simplify);
+      return { pts, area: Math.abs(polyArea(l)) };
+    }).filter(p => p.pts.length >= 3);
+    if (!polys.length) continue;
+    polys.sort((a, b) => b.area - a.area);
+    drawn += polys.length;
+
+    oc.beginPath();
+    polys.forEach((poly, i) => {
+      if (i > 0 && !wantHoles) return;
+      poly.pts.forEach((p, k) => k ? oc.lineTo(p.x, p.y) : oc.moveTo(p.x, p.y));
+      oc.closePath();
+    });
+    if (fill) oc.fill("evenodd");
+    else oc.stroke();
+  }
+
+  trState.result = out;
+  trState.count = drawn;
+  const cnt = document.getElementById("trCount");
+  if (cnt) cnt.textContent = String(drawn);
+  return out;
+}
+
+function polyArea(loop) {
+  // signed area of the edge loop (shoelace on segment midpoints is enough)
+  let a = 0;
+  for (const s of loop) {
+    const x1 = s.x, y1 = s.y;
+    let x2 = x1, y2 = y1;
+    switch (s.d) {
+      case 0: x2 += 1; break;
+      case 1: y2 += 1; break;
+      case 2: x2 -= 1; break;
+      default: y2 -= 1;
+    }
+    a += x1 * y2 - x2 * y1;
+  }
+  return a / 2;
+}
+
+let trJob = 0;
+function trInvalidate() {
+  trState.dirty = true;
+  if (tool !== "trace" || !doc) return;
+  const job = ++trJob;
+  setTimeout(() => {
+    if (job !== trJob || tool !== "trace" || !doc) return;
+    trBuild();
+    trDrawPreview();
+  }, 16);
+}
+
+function trDrawPreview() {
+  if (!doc || tool !== "trace" || !trState.result) { drawOverlay(); return; }
+  const w = stage.clientWidth, h = stage.clientHeight;
+  ctxOvl.clearRect(0, 0, w, h);
+  ctxOvl.save();
+  ctxOvl.globalAlpha = 0.85;
+  ctxOvl.imageSmoothingEnabled = true;
+  ctxOvl.drawImage(trState.result, view.x, view.y,
+    trState.result.width * view.scale, trState.result.height * view.scale);
+  ctxOvl.restore();
+}
+
 const paint = {
   mode: "brush",    // brush | line | fill | erase
   size: 8,
@@ -3911,6 +4381,124 @@ document.getElementById("binPreviewToggle").onclick = () => {
   render();
 };
 
+/* ---- Trace tool UI wiring ---- */
+function trSetMode(mode) {
+  trState.mode = mode;
+  document.querySelectorAll("#trModeRow .btn").forEach(b =>
+    b.classList.toggle("active-mode", b.dataset.trmode === mode));
+  trInvalidate();
+}
+document.querySelectorAll("#trModeRow .btn").forEach(b => {
+  b.onclick = () => trSetMode(b.dataset.trmode);
+});
+
+function trSetSampleThumb(which) {
+  const s = which === 2 ? trState.sample2 : trState.sample;
+  if (which === 2) {
+    if (!s) { document.getElementById("trSample2Row").style.display = "none"; return; }
+    document.getElementById("trThumb2").style.background = `rgb(${s.r},${s.g},${s.b})`;
+    document.getElementById("trMeta2").textContent = `RGB ${s.r},${s.g},${s.b}`;
+    document.getElementById("trSample2Row").style.display = "flex";
+  } else {
+    if (!s) {
+      document.getElementById("trThumb").style.background = "";
+      document.getElementById("trMeta").textContent = t("trace.none");
+      document.getElementById("trPickReset").disabled = true;
+      return;
+    }
+    document.getElementById("trThumb").style.background = `rgb(${s.r},${s.g},${s.b})`;
+    document.getElementById("trMeta").textContent = `RGB ${s.r},${s.g},${s.b}`;
+    document.getElementById("trPickReset").disabled = false;
+  }
+}
+
+document.getElementById("trPickBtn").onclick = () => {
+  if (!doc) { toast(t("msg.openFirst2"), 2500); return; }
+  trState.picking = true;
+  document.body.classList.add("picking-trace");
+  setCursor("crosshair");
+  toast(trState.sample && !trState.sample2 ? t("msg.pickTrace2") : t("msg.pickTrace"), 3000);
+};
+
+document.getElementById("trPickReset").onclick = () => {
+  trState.sample = null;
+  trState.sample2 = null;
+  trState.picking = false;
+  document.body.classList.remove("picking-trace");
+  trSetSampleThumb(1);
+  trSetSampleThumb(2);
+  trInvalidate();
+  render();
+};
+
+document.getElementById("trPickReset2").onclick = () => {
+  trState.sample2 = null;
+  trSetSampleThumb(2);
+  trInvalidate();
+  toast(t("msg.sampleRemoved"), 1800);
+};
+
+function trHandlePick(ip) {
+  const s = pickPixelAt(ip.x, ip.y);
+  if (!s) return false;
+  trState.picking = false;
+  document.body.classList.remove("picking-trace");
+  const isSecond = !!trState.sample && !trState.sample2;
+  if (isSecond) {
+    trState.sample2 = s;
+    trSetSampleThumb(2);
+  } else {
+    trState.sample = s;
+    trSetSampleThumb(1);
+    if (trState.mode !== "luma") {
+      trState.thresh = suggestThreshold(ip.x, ip.y, s);
+      const th = document.getElementById("trThresh");
+      const tv = document.getElementById("trThreshVal");
+      if (th) th.value = trState.thresh;
+      if (tv) tv.textContent = trState.thresh;
+    }
+  }
+  trInvalidate();
+  render();
+  return true;
+}
+
+const trSlider = (id, out, key, parse) => {
+  const el = document.getElementById(id);
+  const o = document.getElementById(out);
+  el.oninput = () => {
+    trState[key] = parse ? parse(el.value) : +el.value;
+    if (o) o.textContent = String(trState[key]);
+    trInvalidate();
+  };
+};
+trSlider("trThresh", "trThreshVal", "thresh");
+trSlider("trClose", "trCloseVal", "close");
+trSlider("trMinArea", "trMinAreaVal", "minArea");
+trSlider("trSimplify", "trSimplifyVal", "simplify", parseFloat);
+trSlider("trStroke", "trStrokeVal", "stroke");
+document.getElementById("trHoles").onchange = (e) => { trState.edgesOnly = e.target.checked; trInvalidate(); };
+document.getElementById("trFillMode").onchange = (e) => { trState.fillMode = e.target.checked; trInvalidate(); };
+
+document.getElementById("trApply").onclick = () => {
+  if (!doc) return;
+  if (!trState.result) trBuild();
+  if (!trState.result) { toast(t("msg.noResult"), 2500); return; }
+  pushHistory();
+  const out = document.createElement("canvas");
+  out.width = trState.result.width;
+  out.height = trState.result.height;
+  out.getContext("2d").drawImage(trState.result, 0, 0);
+  doc.canvas = out;
+  doc.base = null;
+  doc.basePxPerMm = null;
+  ensureBase();
+  fitToView();
+  render();
+  syncScaleFields();
+  toast(t("msg.traceApplied", { n: trState.count }));
+};
+
 document.getElementById("binApply").onclick = () => {
   if (!doc) return;
   if (!binState.result) buildBinary();
@@ -3995,6 +4583,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "b" || e.key === "B") switchTool("binary");
   if (e.key === "e" || e.key === "E") switchTool("export");
   if (e.key === "m" || e.key === "M") switchTool("paint");
+  if (e.key === "t" || e.key === "T") switchTool("trace");
   if (tool === "paint") {
     if (e.key === "b" || e.key === "B") paintSetMode("brush");
     if (e.key === "l" || e.key === "L") paintSetMode("line");
@@ -4063,6 +4652,36 @@ const I18N = {
     "tool.detect.tip": "Компоненти для калібрування (D)",
     "tool.binary.tip": "Бінаризація — виділити доріжки (B)",
     "tool.paint.tip": "Малювання — пензель, лінія, заливка, гумка (M)",
+    "tool.trace": "Контури",
+    "tool.trace.tip": "Контури — обвести доріжки й отвори по краях (T)",
+    "trace.hint": "Знаходить доріжки та отвори як окремі контури по їхніх краях: виділяє мідь, обводить кожну фігуру зовнішнім і внутрішнім контуром, відкидає шум і спрощує лінію.",
+    "trace.samples": "Зразок міді",
+    "trace.samplesCan2": "(можна два)",
+    "trace.pick.tip": "Взяти колір міді піпеткою",
+    "trace.pick": "Піпетка",
+    "trace.pickReset.tip": "Скинути обидва зразки",
+    "trace.none": "не вибрано",
+    "trace.pickReset2.tip": "Прибрати другий зразок",
+    "trace.mode": "Режим відділення",
+    "trace.mode.luma.tip": "За яскравістю (чорне/біле)",
+    "trace.mode.luma": "Світло",
+    "trace.mode.color.tip": "За кольором (відтінок + насиченість)",
+    "trace.mode.color": "Колір",
+    "trace.mode.adaptive.tip": "Локальна адаптація — рівномірно на нерівному фоні",
+    "trace.mode.adaptive": "Авто",
+    "trace.thresh": "Поріг міді",
+    "trace.threshHint": "Піпетка підбирає поріг сама. Повзунок — коли треба взяти більше або менше.",
+    "trace.close": "Заповнення тріщин у міді, px",
+    "trace.closeHint": "Мідь на фото подряпана. Заповнення зшиває дрібні дірки, щоб контур не розсипався.",
+    "trace.minArea": "Мінімальна площа фігури, px²",
+    "trace.simplify": "Спрощення лінії, px",
+    "trace.simplifyHint": "0 — точнісінько по пікселях. Більше — рівніші лінії, менше точок.",
+    "trace.stroke": "Заливка контуру, px",
+    "trace.onlyEdges": "Отвори — теж контуром",
+    "trace.fillMode": "Суцільна заливка замість ліній",
+    "trace.count": "контурів знайдено",
+    "trace.apply": "Застосувати контури",
+    "msg.traceApplied": "Контури застосовано: {n}",
     "tool.export.tip": "Експорт PNG / PDF (E)",
     "tool.undo.tip": "Скасувати останню дію (Ctrl+Z)",
     "tool.redo.tip": "Повторити скасовану дію (Ctrl+Shift+Z)",
@@ -4320,6 +4939,36 @@ const I18N = {
     "tool.detect.tip": "Components for calibration (D)",
     "tool.binary.tip": "Binarize — isolate the traces (B)",
     "tool.paint.tip": "Paint — brush, line, fill, eraser (M)",
+    "tool.trace": "Trace",
+    "tool.trace.tip": "Trace — outline traces and holes along their edges (T)",
+    "trace.hint": "Finds traces and holes as separate contours along their edges: isolates copper, outlines every shape with an outer and inner border, drops noise and simplifies the line.",
+    "trace.samples": "Copper sample",
+    "trace.samplesCan2": "(two allowed)",
+    "trace.pick.tip": "Pick the copper colour with the eyedropper",
+    "trace.pick": "Eyedropper",
+    "trace.pickReset.tip": "Clear both samples",
+    "trace.none": "not picked",
+    "trace.pickReset2.tip": "Remove the second sample",
+    "trace.mode": "Separation mode",
+    "trace.mode.luma.tip": "By brightness (black/white)",
+    "trace.mode.luma": "Light",
+    "trace.mode.color.tip": "By colour (hue + saturation)",
+    "trace.mode.color": "Colour",
+    "trace.mode.adaptive.tip": "Local adaptation — even on uneven background",
+    "trace.mode.adaptive": "Auto",
+    "trace.thresh": "Copper threshold",
+    "trace.threshHint": "The eyedropper picks the threshold itself. Use the slider for more or less.",
+    "trace.close": "Crack fill in copper, px",
+    "trace.closeHint": "Photographed copper is scratched. Filling bridges small gaps so the contour does not fall apart.",
+    "trace.minArea": "Minimum shape area, px²",
+    "trace.simplify": "Line simplification, px",
+    "trace.simplifyHint": "0 — exactly on pixels. More — straighter lines, fewer points.",
+    "trace.stroke": "Contour weight, px",
+    "trace.onlyEdges": "Holes as contours too",
+    "trace.fillMode": "Solid fill instead of lines",
+    "trace.count": "contours found",
+    "trace.apply": "Apply contours",
+    "msg.traceApplied": "Contours applied: {n}",
     "tool.export.tip": "Export PNG / PDF (E)",
     "tool.undo.tip": "Undo the last action (Ctrl+Z)",
     "tool.redo.tip": "Redo the undone action (Ctrl+Shift+Z)",
