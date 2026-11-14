@@ -987,6 +987,15 @@
             <output id="stlMinSideVal">px</output>
           </div>
           <p class="hint" style="margin:2px 0 0" data-i18n="exp.stlspeckshint">Відкидає фігури з меншою стороною за вказану кількість пікселів.</p>
+          <label style="margin-top:10px;display:block" data-i18n="exp.stlcell">Деталізація моделі, px</label>
+          <div class="slider-row">
+            <input type="range" id="stlCell" min="1" max="8" step="1" value="2">
+            <input type="number" id="stlCellNum" min="1" max="64" step="1" value="2"
+                   data-i18n-aria="exp.stlcellaria" aria-label="Розмір комірки, px"
+                   style="width:74px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:12px;background:var(--input-bg);color:var(--input-text)">
+            <output id="stlCellVal">px</output>
+          </div>
+          <p class="hint" style="margin:2px 0 0" data-i18n="exp.stlcellhint">Більше значення — менше полігонів і менший файл, але дрібні деталі згладжуються. 1 = точно по пікселях.</p>
         </div>
         <button class="btn primary" id="exportStlBtn" style="margin-top:6px;" data-i18n="exp.stlbtn">Експорт STL</button>
 
@@ -3225,158 +3234,118 @@ function stlDespeckle(hi, w, h, minSide) {
 }
 
 // Height of the surface at a pixel CENTRE, in layers. Everything outside the ink
-// is the plate, everything inside is the relief — a pure step function, which is
-// what makes the side walls fall exactly on pixel edges.
+// is the plate, everything inside is the relief — a pure step function.
+//
+// The surface is emitted per CELL, not per pixel. A cell is a square of pixels
+// (stlCellValue()) and it is "raised" only when every pixel in it is ink; any
+// other cell prints as plain plate, which is exactly what the pixel-perfect
+// mesh did. Since both levels are flat, long runs merge into single rectangles,
+// so a whole board shrinks from tens of thousands of triangles to a few hundred
+// while the outline stays a staircase on the same grid.
+//
+// Watertightness: every vertex is keyed by "x|y|layer", so two triangles that
+// share a grid edge use the very same vertex ids and the surface closes.
+function stlCellValue() {
+  const el = document.getElementById("stlCell");
+  const raw = el ? parseInt(el.value, 10) : 1;
+  return isFinite(raw) && raw > 0 ? Math.min(64, raw) : 1;
+}
+
+
 function stlSolid(w, h, hi, withBase) {
-  // With no base plate the top surface is emitted straight at bed level. The
-  // structure below stays identical to the base case (walls and floor both sit
-  // on layer 0), so no triangle is ever duplicated — only the ink tops are
-  // lifted to layer 2, which is exactly the shape standing on z = 0.
-  if (!withBase) return stlSolidLifted(w, h, hi);
-  const verts = new Map();
-  const faces = [];
-  const vid = (gx, gy, layer) => {
-    const k = gx + "|" + gy + "|" + layer;
-    let id = verts.get(k);
-    if (id === undefined) { id = verts.size; verts.set(k, id); }
-    return id;
-  };
-  const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && hi[y * w + x] === 1;
-  const tri = (a, b, c) => faces.push(a, b, c);
-  // No base plate: the plate level collapses onto the bed, so the relief sits
-  // directly on z = 0 and the body stays watertight without a floor slab.
   const INK = 2, PLATE = withBase ? 1 : 0, BED = 0;
-
-  // Horizontal top: one quad per pixel, at its own height. Ink pixels sit at
-  // INK, the rest at PLATE; the quad corners belong to the pixel, not to the
-  // neighbour, so the step stays sharp and the walls line up with the surface.
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const lay = on(x, y) ? INK : PLATE;
-      const a = vid(x, y, lay), b = vid(x + 1, y, lay);
-      const c = vid(x + 1, y + 1, lay), d = vid(x, y + 1, lay);
-      tri(a, b, c);
-      tri(a, c, d);
+  const cs = Math.max(1, Math.round(stlCellValue()));
+  const gw = Math.ceil(w / cs), gh = Math.ceil(h / cs);
+  const raised = new Uint8Array(gw * gh);
+  for (let cy = 0; cy < gh; cy++) {
+    const y0 = cy * cs, y1 = Math.min(h, y0 + cs);
+    for (let cx = 0; cx < gw; cx++) {
+      const x0 = cx * cs, x1 = Math.min(w, x0 + cs);
+      let all = 1;
+      for (let y = y0; y < y1 && all; y++) {
+        const row = y * w;
+        for (let x = x0; x < x1; x++) if (!hi[row + x]) { all = 0; break; }
+      }
+      raised[cy * gw + cx] = all;
     }
   }
-
-  // Side walls: at every pixel edge that separates ink from plate.
-  // Winding: the lower edge is taken left-to-right, the upper edge right-to-
-  // left, so the two triangles below always share the exact same edge pair as
-  // the horizontal quads they touch.
-  const wall = (X0, Y0, X1, Y1) => {
-    const bl = vid(X0, Y0, PLATE), br = vid(X1, Y1, PLATE);
-    const tr = vid(X1, Y1, INK), tl = vid(X0, Y0, INK);
-    tri(bl, br, tr);
-    tri(bl, tr, tl);
+  const H = (cx, cy) => {
+    if (cx < 0 || cy < 0 || cx >= gw || cy >= gh) return BED;
+    return raised[cy * gw + cx] ? INK : PLATE;
   };
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!on(x, y)) continue;
-      if (!on(x, y - 1)) wall(x, y, x + 1, y);
-      if (!on(x + 1, y)) wall(x + 1, y, x + 1, y + 1);
-      if (!on(x, y + 1)) wall(x + 1, y + 1, x, y + 1);
-      if (!on(x - 1, y)) wall(x, y + 1, x, y);
-    }
-  }
-
-  // Plate frame: the outer border, from the plate down to the bed.
-  for (let x = 0; x < w; x++) {
-    {
-      const bl = vid(x, 0, BED), br = vid(x + 1, 0, BED);
-      const tr = vid(x + 1, 0, PLATE), tl = vid(x, 0, PLATE);
-      tri(bl, br, tr); tri(bl, tr, tl);
-    }
-    {
-      const bl = vid(x + 1, h, BED), br = vid(x, h, BED);
-      const tr = vid(x, h, PLATE), tl = vid(x + 1, h, PLATE);
-      tri(bl, br, tr); tri(bl, tr, tl);
-    }
-  }
-  for (let y = 0; y < h; y++) {
-    {
-      const bl = vid(0, y + 1, BED), br = vid(0, y, BED);
-      const tr = vid(0, y, PLATE), tl = vid(0, y + 1, PLATE);
-      tri(bl, br, tr); tri(bl, tr, tl);
-    }
-    {
-      const bl = vid(w, y, BED), br = vid(w, y + 1, BED);
-      const tr = vid(w, y + 1, PLATE), tl = vid(w, y, PLATE);
-      tri(bl, br, tr); tri(bl, tr, tl);
-    }
-  }
-
-  // Bed: one quad per pixel, facing down.
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const a = vid(x, y, BED), b = vid(x + 1, y, BED);
-      const c = vid(x + 1, y + 1, BED), d = vid(x, y + 1, BED);
-      tri(a, c, b);
-      tri(a, d, c);
-    }
-  }
-
-  return { verts, faces };
-}
-
-// No-base variant: a separate grid where plain pixels and ink pixels live on
-// their own vertex columns, so no two triangles can ever claim the same edge.
-function stlSolidLifted(w, h, hi) {
+  const gx = cx => Math.min(w, cx * cs);
+  const gy = cy => Math.min(h, cy * cs);
   const verts = new Map();
   const faces = [];
-  const vid = (gx, gy, layer) => {
-    const k = gx + "|" + gy + "|" + layer;
+  const vid = (x, y, layer) => {
+    const k = x + "|" + y + "|" + layer;
     let id = verts.get(k);
     if (id === undefined) { id = verts.size; verts.set(k, id); }
     return id;
   };
-  const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && hi[y * w + x] === 1;
-  const tri = (a, b, c) => faces.push(a, b, c);
-  const LOW = 0, HIGH = 2;
-
-  // Ink tops: they own the HIGH column of every ink pixel corner.
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!on(x, y)) continue;
-      const a = vid(x, y, HIGH), b = vid(x + 1, y, HIGH);
-      const c = vid(x + 1, y + 1, HIGH), d = vid(x, y + 1, HIGH);
-      tri(a, b, c);
-      tri(a, c, d);
-    }
-  }
-
-  // Walls: one quad per bare neighbour, from the bed up to the ink top. The
-  // edge is taken so that the outward side is the one seen counter-clockwise.
-  const wall = (X0, Y0, X1, Y1) => {
-    const a = vid(X0, Y0, LOW), b = vid(X1, Y1, LOW);
-    const c = vid(X1, Y1, HIGH), d = vid(X0, Y0, HIGH);
-    tri(a, b, c);
-    tri(a, c, d);
+  // Horizontal rectangle; corners in (x0,y0)(x1,y0)(x1,y1)(x0,y1).
+  const flat = (X0, Y0, X1, Y1, layer, up) => {
+    const a = vid(X0, Y0, layer), b = vid(X1, Y0, layer);
+    const c = vid(X1, Y1, layer), d = vid(X0, Y1, layer);
+    if (up) { faces.push(a, b, c, a, c, d); } else { faces.push(a, d, c, a, c, b); }
   };
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!on(x, y)) continue;
-      if (!on(x, y - 1)) wall(x, y, x + 1, y);
-      if (!on(x + 1, y)) wall(x + 1, y, x + 1, y + 1);
-      if (!on(x, y + 1)) wall(x + 1, y + 1, x, y + 1);
-      if (!on(x - 1, y)) wall(x, y + 1, x, y);
+  // Vertical face; bottom corners a=(X0,Y0) b=(X1,Y1), lifted to c and d.
+  // Vertical face; bottom corners a=(X0,Y0) b=(X1,Y1) lifted to c and d.
+  const wall = (X0, Y0, X1, Y1, high, low) => {
+    const a = vid(X0, Y0, low), b = vid(X1, Y1, low);
+    const c = vid(X1, Y1, high), d = vid(X0, Y0, high);
+    faces.push(a, b, c, a, c, d);
+  };
+  for (const r of stlRects(gw, gh, H)) {
+    if (r.lay <= BED) continue;
+    flat(gx(r.x0), gy(r.y0), gx(r.x1), gy(r.y1), r.lay, true);
+    flat(gx(r.x0), gy(r.y0), gx(r.x1), gy(r.y1), BED, false);
+  }
+  for (let cy = 0; cy <= gh; cy++) {
+    for (let cx = 0; cx < gw; cx++) {
+      const up = H(cx, cy - 1), dn = H(cx, cy);
+      if (up === dn) continue;
+      let x1 = cx + 1;
+      while (x1 < gw && H(x1, cy - 1) === up && H(x1, cy) === dn) x1++;
+      const X0 = gx(cx), X1 = gx(x1), Y = gy(cy);
+      if (up > dn) wall(X0, Y, X1, Y, up, dn);
+      else wall(X1, Y, X0, Y, dn, up);
+      cx = x1 - 1;
     }
   }
-
-  // Floor: a quad under every ink pixel, facing down at z = 0.
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!on(x, y)) continue;
-      const a = vid(x, y, LOW), b = vid(x + 1, y, LOW);
-      const c = vid(x + 1, y + 1, LOW), d = vid(x, y + 1, LOW);
-      tri(a, c, b);
-      tri(a, d, c);
+  for (let cx = 0; cx <= gw; cx++) {
+    for (let cy = 0; cy < gh; cy++) {
+      const lf = H(cx - 1, cy), rt = H(cx, cy);
+      if (lf === rt) continue;
+      let y1 = cy + 1;
+      while (y1 < gh && H(cx - 1, y1) === lf && H(cx, y1) === rt) y1++;
+      const Y0 = gy(cy), Y1 = gy(y1), X = gx(cx);
+      if (rt > lf) wall(X, Y1, X, Y0, rt, lf);
+      else wall(X, Y0, X, Y1, lf, rt);
+      cy = y1 - 1;
     }
   }
-
   return { verts, faces };
 }
-
+function stlRects(gw, gh, valAt) {
+  const done = new Uint8Array(gw * gh);
+  const out = [];
+  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+    const p = y * gw + x;
+    if (done[p]) continue;
+    const v = valAt(x, y);
+    let x1 = x + 1;
+    while (x1 < gw && !done[y * gw + x1] && valAt(x1, y) === v) x1++;
+    let y1 = y + 1;
+    grow: while (y1 < gh) {
+      for (let xx = x; xx < x1; xx++) if (done[y1 * gw + xx] || valAt(xx, y1) !== v) break grow;
+      y1++;
+    }
+    for (let yy = y; yy < y1; yy++) for (let xx = x; xx < x1; xx++) done[yy * gw + xx] = 1;
+    out.push({ x0: x, y0: y, x1, y1, lay: v });
+  }
+  return out;
+}
 function stlBuildMesh() {
   const thick = stlThickValue();
   const base = stlBaseValue();
@@ -3505,6 +3474,21 @@ if (stlMinSideEl) stlMinSideEl.oninput = () => {
 if (stlMinSideNum) stlMinSideNum.oninput = () => {
   const v = parseInt(stlMinSideNum.value, 10);
   if (isFinite(v) && v >= +stlMinSideEl.min && v <= +stlMinSideEl.max) stlMinSideEl.value = v;
+};
+
+// Model detail: one cell covers N x N pixels of the bitmap. The number field is
+// the source of truth, the slider is just a quick way to set the usual range.
+const stlCellEl = document.getElementById("stlCell");
+const stlCellNum = document.getElementById("stlCellNum");
+const stlCellVal = document.getElementById("stlCellVal");
+if (stlCellEl) stlCellEl.oninput = () => {
+  stlCellNum.value = stlCellEl.value;
+  stlCellVal.textContent = t("msg.px");
+};
+if (stlCellNum) stlCellNum.oninput = () => {
+  const v = parseInt(stlCellNum.value, 10);
+  stlCellVal.textContent = t("msg.px");
+  if (isFinite(v) && v >= +stlCellEl.min && v <= +stlCellEl.max) stlCellEl.value = v;
 };
 
 document.getElementById("exportPngBtn").onclick = async () => {
@@ -5785,6 +5769,9 @@ const I18N = {
     "exp.stlminsidearia": "Мінімальна сторона, px",
     "exp.stlspeckshint": "Відкидає фігури з меншою стороною за вказану кількість пікселів.",
     "exp.stlbtn": "Експорт STL",
+    "exp.stlcell": "Деталізація моделі, px",
+    "exp.stlcellaria": "Розмір комірки, px",
+    "exp.stlcellhint": "Більше значення — менше полігонів і менший файл, але дрібні деталі згладжуються. 1 = точно по пікселях.",
     "exp.tris": "трикутників",
     "msg.stlRender": "Побудова 3D-моделі…",
     "msg.stlEmpty": "Немає що експортувати: у зображенні не знайдено фігур.",
@@ -6110,6 +6097,9 @@ const I18N = {
     "exp.stlminsidearia": "Minimum side, px",
     "exp.stlspeckshint": "Drops shapes whose smaller side is below the given number of pixels.",
     "exp.stlbtn": "Export STL",
+    "exp.stlcell": "Model detail, px",
+    "exp.stlcellaria": "Cell size, px",
+    "exp.stlcellhint": "A higher value means fewer polygons and a smaller file, but fine details get smoothed. 1 = exact pixels.",
     "exp.tris": "triangles",
     "msg.stlRender": "Building the 3D model…",
     "msg.stlEmpty": "Nothing to export: no shapes found in the image.",
