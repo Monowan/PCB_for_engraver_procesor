@@ -3494,7 +3494,6 @@ function stlBaseSync() {
   if (stlBaseVal) stlBaseVal.textContent = t("msg.mm");
 }
 if (stlBaseEl) stlBaseEl.onchange = stlBaseSync;
-stlBaseSync();
 
 const stlMinSideEl = document.getElementById("stlMinSide");
 const stlMinSideNum = document.getElementById("stlMinSideNum");
@@ -6267,6 +6266,7 @@ function refreshDynamicText() {
   if (typeof renderComponentList === "function") renderComponentList();
   if (typeof updateAlignButton === "function") updateAlignButton();
   if (typeof updateScaleTwoButton === "function") updateScaleTwoButton();
+  if (typeof stlBaseSync === "function") stlBaseSync();
   if (typeof binSetMode === "function") binSetMode(binState.mode);
   if (typeof paintSetView === "function") {
     document.getElementById("paintGhostVal").textContent = paint.ghost + "%";
