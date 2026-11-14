@@ -3319,8 +3319,11 @@ function stlSolid(w, h, hi, withBase) {
     verts.push(n % cols * stepX, Math.floor(n / cols) * stepY, zTop[n]);
   };
 
-  // A cell is built when it has ink or, with the plate on, always.
-  const cellOn = (a, b, c, d) => withBase || (ink[a] | ink[b] | ink[c] | ink[d]) !== 0;
+  // A cell is printed only when its whole footprint is ink. Corner cells that
+  // are only partly inked are dropped, so every floor slab sits exactly under a
+  // standing wall: no thin ledge on the first layer, no slanted skirt where a
+  // corner was clipped.
+  const cellOn = (a, b, c, d) => withBase || (ink[a] & ink[b] & ink[c] & ink[d]) === 1;
 
   for (let j = 0; j < rows - 1; j++) {
     for (let i = 0; i < cols - 1; i++) {
@@ -3331,10 +3334,9 @@ function stlSolid(w, h, hi, withBase) {
       const ab = idB[a], at = idT[a], bb = idB[b], bt = idT[b];
       const cb = idB[c], ct = idT[c], db = idB[d], dt = idT[d];
 
-      // Top face, normal +Z. Nodes that are still absent are not part of the cell.
-      const up = [at, bt, ct, dt].filter(v => v >= 0).length;
-      if (up > 0) faces.push(at, bt, dt, at, dt, ct);
-      // Bottom face, normal -Z.
+      // Top face, normal +Z.
+      faces.push(at, bt, dt, at, dt, ct);
+      // Bottom face, normal -Z. The floor always matches the walls above it.
       faces.push(ab, db, bb, ab, cb, db);
 
       // A wall is emitted only towards a neighbour that is not printed, so the
