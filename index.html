@@ -3265,9 +3265,12 @@ function stlCellValue() {
 // reimplemented here so the app stays dependency free.
 function stlSolid(w, h, hi, withBase) {
   // Z of each level: bed stays at 0 so the model sits on the print bed.
+  // Without the base plate the solid has to be a single layer: the empty cells
+  // drop to the bed as well, otherwise the bare top surface would still sit on
+  // an invisible full-size slab at z = 0.
   const zBed = 0;
   const zPlate = withBase ? stlBaseValue() : 0;
-  const zInk = zPlate + stlThickValue();
+  const zInk = withBase ? zPlate + stlThickValue() : stlThickValue();
 
   // Sample the mask on the cell grid; a cell is ink when most of it is ink.
   const cs = Math.max(1, Math.round(stlCellValue()));
