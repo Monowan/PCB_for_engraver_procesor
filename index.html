@@ -959,6 +959,35 @@
           <p class="hint" style="margin:2px 0 0" data-i18n="exp.svgcleanhint">Прибирає піщинки й обривки, менші за вказану сторону в px.</p>
         </div>
         <button class="btn primary" id="exportSvgBtn" style="margin-top:6px;" data-i18n="exp.svgbtn">Експорт SVG</button>
+        <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+          <label data-i18n="exp.stl">STL — 3D-модель для друку</label>
+          <div class="slider-row">
+            <input type="range" id="stlThick" min="0.05" max="20" step="0.05" value="1.5">
+            <input type="number" id="stlThickNum" min="0.01" max="200" step="0.05" value="1.5"
+                   data-i18n-aria="exp.stlthickaria" aria-label="Товщина рельєфу, мм"
+                   style="width:74px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:12px;background:var(--input-bg);color:var(--input-text)">
+            <output id="stlThickVal">мм</output>
+          </div>
+          <p class="hint" style="margin:2px 0 0" data-i18n="exp.stlthickhint">Висота рельєфу над основою, мм. Введіть число вручну або тягніть повзунок.</p>
+          <div class="field" style="margin-top:8px">
+            <label data-i18n="exp.stlbaseh">Товщина основи, мм</label>
+            <input type="number" id="stlBaseNum" min="0.1" max="100" step="0.1" value="1.2"
+                   data-i18n-aria="exp.stlbaseh" aria-label="Товщина основи, мм"
+                   style="width:86px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:12px;background:var(--input-bg);color:var(--input-text)">
+            <p class="hint" style="margin:2px 0 0" data-i18n="exp.stlbasehint">Суцільний шар під рельєфом — модель залишається твердотільним тілом.</p>
+          </div>
+          <label class="chk" style="margin:6px 0 0"><input type="checkbox" id="stlInvert"> <span data-i18n="exp.stlinvert">Інверсія (негативом)</span></label>
+          <label class="chk"><input type="checkbox" id="stlSpecks" checked> <span data-i18n="exp.stlspecks">Видаляти дрібні об'єкти</span></label>
+          <div class="slider-row" id="stlSpecksRow">
+            <input type="range" id="stlMinSide" min="1" max="40" step="1" value="3">
+            <input type="number" id="stlMinSideNum" min="1" max="500" step="1" value="3"
+                   data-i18n-aria="exp.stlminsidearia" aria-label="Мінімальна сторона, px"
+                   style="width:74px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:12px;background:var(--input-bg);color:var(--input-text)">
+            <output id="stlMinSideVal">px</output>
+          </div>
+          <p class="hint" style="margin:2px 0 0" data-i18n="exp.stlspeckshint">Відкидає фігури з меншою стороною за вказану кількість пікселів.</p>
+        </div>
+        <button class="btn primary" id="exportStlBtn" style="margin-top:6px;" data-i18n="exp.stlbtn">Експорт STL</button>
 
         <p class="status" id="exportStatus"></p>
         <p class="status" id="exportSize"></p>
@@ -3122,6 +3151,283 @@ function showExportSize(pxW, pxH, mmW, mmH) {
   const el = document.getElementById("exportSize");
   if (el) el.textContent = t("exp.size") + exportSizeText(pxW, pxH, mmW, mmH);
 }
+
+/* ============================================================
+   STL EXPORT — one closed solid for 3D printing
+   ------------------------------------------------------------
+   The bitmap becomes a height field on top of a solid base plate.
+
+   Why this one is watertight: every vertex is created from an INTEGER grid
+   corner and a layer number (0 = bed, 1 = plate top, 2 = relief top). Two
+   triangles that touch therefore reference the very same vertex id, so the
+   shared edge is walked in opposite directions by both of them and the surface
+   closes. Millimetres are computed only at write time, so no seam can drift.
+
+   The surface is built per pixel quad and then welded; flat runs cost nothing
+   extra because identical vertices are shared, not duplicated.
+   ============================================================ */
+function stlThickValue() {
+  const num = document.getElementById("stlThickNum");
+  const raw = parseFloat(num.value);
+  const v = isFinite(raw) && raw > 0 ? raw : 1.5;
+  return Math.max(0.01, Math.min(200, v));
+}
+function stlBaseValue() {
+  const num = document.getElementById("stlBaseNum");
+  const raw = parseFloat(num.value);
+  const v = isFinite(raw) && raw > 0 ? raw : 1.2;
+  return Math.max(0.1, Math.min(100, v));
+}
+function stlMinSideValue() {
+  const chk = document.getElementById("stlSpecks");
+  if (chk && !chk.checked) return 0;
+  const num = document.getElementById("stlMinSideNum");
+  const raw = parseInt(num.value, 10);
+  return isFinite(raw) && raw > 0 ? Math.min(500, raw) : 0;
+}
+
+// Drop shapes thinner than N px and close pinholes of the same size: dust would
+// otherwise print as spikes, and pinholes would punch pits through the solid.
+function stlDespeckle(hi, w, h, minSide) {
+  if (minSide <= 1) return hi;
+  const { labels, blobs } = trLabel(hi, w, h);
+  const keep = new Uint8Array(w * h);
+  for (const b of blobs) {
+    const bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1;
+    if (Math.min(bw, bh) < minSide) continue;
+    for (let y = b.minY; y <= b.maxY; y++) {
+      const row = y * w;
+      for (let x = b.minX; x <= b.maxX; x++) {
+        const p = row + x;
+        if (labels[p] === b.id) keep[p] = 1;
+      }
+    }
+  }
+  const inv = new Uint8Array(w * h);
+  for (let p = 0; p < w * h; p++) inv[p] = keep[p] ? 0 : 1;
+  const hl = trLabel(inv, w, h);
+  for (const b of hl.blobs) {
+    if (b.minX === 0 || b.minY === 0 || b.maxX === w - 1 || b.maxY === h - 1) continue;
+    const bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1;
+    if (Math.min(bw, bh) >= minSide) continue;
+    for (let y = b.minY; y <= b.maxY; y++) {
+      const row = y * w;
+      for (let x = b.minX; x <= b.maxX; x++) {
+        const p = row + x;
+        if (hl.labels[p] === b.id) keep[p] = 1;
+      }
+    }
+  }
+  return keep;
+}
+
+// Height of the surface at a pixel CENTRE, in layers. Everything outside the ink
+// is the plate, everything inside is the relief — a pure step function, which is
+// what makes the side walls fall exactly on pixel edges.
+function stlSolid(w, h, hi) {
+  const verts = new Map();
+  const faces = [];
+  const vid = (gx, gy, layer) => {
+    const k = gx + "|" + gy + "|" + layer;
+    let id = verts.get(k);
+    if (id === undefined) { id = verts.size; verts.set(k, id); }
+    return id;
+  };
+  const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && hi[y * w + x] === 1;
+  const tri = (a, b, c) => faces.push(a, b, c);
+  const INK = 2, PLATE = 1, BED = 0;
+
+  // Horizontal top: one quad per pixel, at its own height. Ink pixels sit at
+  // INK, the rest at PLATE; the quad corners belong to the pixel, not to the
+  // neighbour, so the step stays sharp and the walls line up with the surface.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const lay = on(x, y) ? INK : PLATE;
+      const a = vid(x, y, lay), b = vid(x + 1, y, lay);
+      const c = vid(x + 1, y + 1, lay), d = vid(x, y + 1, lay);
+      tri(a, b, c);
+      tri(a, c, d);
+    }
+  }
+
+  // Side walls: at every pixel edge that separates ink from plate.
+  // Winding: the lower edge is taken left-to-right, the upper edge right-to-
+  // left, so the two triangles below always share the exact same edge pair as
+  // the horizontal quads they touch.
+  const wall = (X0, Y0, X1, Y1) => {
+    const bl = vid(X0, Y0, PLATE), br = vid(X1, Y1, PLATE);
+    const tr = vid(X1, Y1, INK), tl = vid(X0, Y0, INK);
+    tri(bl, br, tr);
+    tri(bl, tr, tl);
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!on(x, y)) continue;
+      if (!on(x, y - 1)) wall(x, y, x + 1, y);
+      if (!on(x + 1, y)) wall(x + 1, y, x + 1, y + 1);
+      if (!on(x, y + 1)) wall(x + 1, y + 1, x, y + 1);
+      if (!on(x - 1, y)) wall(x, y + 1, x, y);
+    }
+  }
+
+  // Plate frame: the outer border, from the plate down to the bed.
+  for (let x = 0; x < w; x++) {
+    {
+      const bl = vid(x, 0, BED), br = vid(x + 1, 0, BED);
+      const tr = vid(x + 1, 0, PLATE), tl = vid(x, 0, PLATE);
+      tri(bl, br, tr); tri(bl, tr, tl);
+    }
+    {
+      const bl = vid(x + 1, h, BED), br = vid(x, h, BED);
+      const tr = vid(x, h, PLATE), tl = vid(x + 1, h, PLATE);
+      tri(bl, br, tr); tri(bl, tr, tl);
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    {
+      const bl = vid(0, y + 1, BED), br = vid(0, y, BED);
+      const tr = vid(0, y, PLATE), tl = vid(0, y + 1, PLATE);
+      tri(bl, br, tr); tri(bl, tr, tl);
+    }
+    {
+      const bl = vid(w, y, BED), br = vid(w, y + 1, BED);
+      const tr = vid(w, y + 1, PLATE), tl = vid(w, y, PLATE);
+      tri(bl, br, tr); tri(bl, tr, tl);
+    }
+  }
+
+  // Bed: one quad per pixel, facing down.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const a = vid(x, y, BED), b = vid(x + 1, y, BED);
+      const c = vid(x + 1, y + 1, BED), d = vid(x, y + 1, BED);
+      tri(a, c, b);
+      tri(a, d, c);
+    }
+  }
+
+  return { verts, faces };
+}
+
+function stlBuildMesh() {
+  const thick = stlThickValue();
+  const base = stlBaseValue();
+  const invert = document.getElementById("stlInvert").checked;
+  const ppm = doc.pxPerMm;
+
+  const w = doc.canvas.width, h = doc.canvas.height;
+  const data = doc.canvas.getContext("2d", { willReadFrequently: true })
+    .getImageData(0, 0, w, h).data;
+
+  const hi = new Uint8Array(w * h);
+  for (let p = 0; p < w * h; p++) {
+    const i = p * 4;
+    const v = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    let on = v < 128 ? 1 : 0;
+    if (invert) on = on ? 0 : 1;
+    hi[p] = on;
+  }
+
+  const clean = stlDespeckle(hi, w, h, stlMinSideValue());
+  const sx = ppm ? 1 / ppm : 0.1;   // mm per pixel
+  const solid = stlSolid(w, h, clean);
+
+  return {
+    verts: solid.verts,
+    faces: solid.faces,
+    sx, base, thick,
+    W: w * sx, H: h * sx,
+    count: solid.faces.length / 3,
+  };
+}
+
+// Flatten the welded mesh into binary STL: 9 floats per triangle, normals from
+// the triangle itself so they always agree with the winding.
+function stlWriteBinary(mesh) {
+  const { verts, faces, sx, base, thick } = mesh;
+  const pos = new Float32Array(verts.size * 3);
+  for (const [k, id] of verts) {
+    const q = k.split("|");
+    const gx = +q[0], gy = +q[1], layer = +q[2];
+    const z = layer === 0 ? 0 : layer === 1 ? base : base + thick;
+    pos[id * 3] = gx * sx;
+    pos[id * 3 + 1] = gy * sx;
+    pos[id * 3 + 2] = z;
+  }
+
+  const n = faces.length / 3;
+  const buf = new ArrayBuffer(84 + n * 50);
+  const dv = new DataView(buf);
+  new Uint8Array(buf, 0, 80).set(
+    new TextEncoder().encode("Binary STL - PCB relief").subarray(0, 80));
+  dv.setUint32(80, n, true);
+  let o = 84;
+  for (let f = 0; f < n; f++) {
+    const ia = faces[f * 3] * 3, ib = faces[f * 3 + 1] * 3, ic = faces[f * 3 + 2] * 3;
+    const ax = pos[ia], ay = pos[ia + 1], az = pos[ia + 2];
+    const bx = pos[ib], by = pos[ib + 1], bz = pos[ib + 2];
+    const cx = pos[ic], cy = pos[ic + 1], cz = pos[ic + 2];
+    const ux = bx - ax, uy = by - ay, uz = bz - az;
+    const vx = cx - ax, vy = cy - ay, vz = cz - az;
+    let nx = uy * vz - uz * vy;
+    let ny = uz * vx - ux * vz;
+    let nz = ux * vy - uy * vx;
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+    nx /= len; ny /= len; nz /= len;
+    dv.setFloat32(o, nx, true);
+    dv.setFloat32(o + 4, ny, true);
+    dv.setFloat32(o + 8, nz, true);
+    dv.setFloat32(o + 12, ax, true); dv.setFloat32(o + 16, ay, true); dv.setFloat32(o + 20, az, true);
+    dv.setFloat32(o + 24, bx, true); dv.setFloat32(o + 28, by, true); dv.setFloat32(o + 32, bz, true);
+    dv.setFloat32(o + 36, cx, true); dv.setFloat32(o + 40, cy, true); dv.setFloat32(o + 44, cz, true);
+    dv.setUint16(o + 48, 0, true);
+    o += 50;
+  }
+  return new Blob([buf], { type: "model/stl" });
+}
+
+document.getElementById("exportStlBtn").onclick = () => {
+  if (!doc) { toast(t("msg.noFile")); return; }
+  const st = document.getElementById("exportStatus");
+  st.textContent = t("msg.stlRender");
+  try {
+    const m = stlBuildMesh();
+    if (!m.count) { st.textContent = t("msg.stlEmpty"); return; }
+    const blob = stlWriteBinary(m);
+    const a = document.createElement("a");
+    a.download = `pcb_${m.W.toFixed(1)}x${m.H.toFixed(1)}mm.stl`;
+    a.href = URL.createObjectURL(blob);
+    a.click();
+    st.textContent = t("msg.perpDone") + `${m.count} ${t("exp.tris")}` +
+      (doc.pxPerMm ? "" : " · " + t("msg.noScaleWarn"));
+    showExportSize(doc.canvas.width, doc.canvas.height, m.W, m.H);
+  } catch (e) { st.textContent = t("msg.error") + e.message; }
+};
+
+// slider and number field mirror each other; a typed value is never clamped to
+// the slider range, because the field is the source of truth
+const stlThickEl = document.getElementById("stlThick");
+const stlThickNum = document.getElementById("stlThickNum");
+const stlThickVal = document.getElementById("stlThickVal");
+if (stlThickEl) stlThickEl.oninput = () => {
+  stlThickNum.value = stlThickEl.value;
+  stlThickVal.textContent = t("msg.mm");
+};
+if (stlThickNum) stlThickNum.oninput = () => {
+  const v = parseFloat(stlThickNum.value);
+  if (isFinite(v) && v > 0 && v >= +stlThickEl.min && v <= +stlThickEl.max) stlThickEl.value = v;
+};
+const stlMinSideEl = document.getElementById("stlMinSide");
+const stlMinSideNum = document.getElementById("stlMinSideNum");
+const stlMinSideVal = document.getElementById("stlMinSideVal");
+if (stlMinSideEl) stlMinSideEl.oninput = () => {
+  stlMinSideNum.value = stlMinSideEl.value;
+  stlMinSideVal.textContent = t("msg.px");
+};
+if (stlMinSideNum) stlMinSideNum.oninput = () => {
+  const v = parseInt(stlMinSideNum.value, 10);
+  if (isFinite(v) && v >= +stlMinSideEl.min && v <= +stlMinSideEl.max) stlMinSideEl.value = v;
+};
 
 document.getElementById("exportPngBtn").onclick = async () => {
   if (!doc) { toast(t("msg.noFile")); return; }
@@ -5390,6 +5696,19 @@ const I18N = {
     "exp.svgclean": "Видаляти дрібні деталі",
     "exp.svgcleanhint": "Прибирає піщинки й обривки, менші за вказану сторону в px.",
     "exp.svgbtn": "Експорт SVG",
+    "exp.stl": "STL — 3D-модель для друку",
+    "exp.stlthickaria": "Товщина рельєфу, мм",
+    "exp.stlthickhint": "Висота рельєфу над основою, мм. Введіть число вручну або тягніть повзунок.",
+    "exp.stlbaseh": "Товщина основи, мм",
+    "exp.stlbasehint": "Суцільний шар під рельєфом — модель залишається твердотільним тілом.",
+    "exp.stlinvert": "Інверсія (негативом)",
+    "exp.stlspecks": "Видаляти дрібні обʼєкти",
+    "exp.stlminsidearia": "Мінімальна сторона, px",
+    "exp.stlspeckshint": "Відкидає фігури з меншою стороною за вказану кількість пікселів.",
+    "exp.stlbtn": "Експорт STL",
+    "exp.tris": "трикутників",
+    "msg.stlRender": "Побудова 3D-моделі…",
+    "msg.stlEmpty": "Немає що експортувати: у зображенні не знайдено фігур.",
     "exp.shapes": "контурів",
     "msg.svgRender": "Векторизація SVG…",
     "msg.sizeUnknown2": "масштаб не визначено",
@@ -5701,6 +6020,19 @@ const I18N = {
     "exp.svgclean": "Remove small details",
     "exp.svgcleanhint": "Drops specks and fragments thinner than the given side in px.",
     "exp.svgbtn": "Export SVG",
+    "exp.stl": "STL — 3D printable model",
+    "exp.stlthickaria": "Relief height, mm",
+    "exp.stlthickhint": "Height of the relief above the base, mm. Type a value or drag the slider.",
+    "exp.stlbaseh": "Base thickness, mm",
+    "exp.stlbasehint": "A solid layer under the relief — keeps the model a closed body.",
+    "exp.stlinvert": "Invert (negative)",
+    "exp.stlspecks": "Remove small objects",
+    "exp.stlminsidearia": "Minimum side, px",
+    "exp.stlspeckshint": "Drops shapes whose smaller side is below the given number of pixels.",
+    "exp.stlbtn": "Export STL",
+    "exp.tris": "triangles",
+    "msg.stlRender": "Building the 3D model…",
+    "msg.stlEmpty": "Nothing to export: no shapes found in the image.",
     "exp.shapes": "contours",
     "msg.svgRender": "Vectorising SVG…",
     "msg.sizeUnknown2": "scale unknown",
