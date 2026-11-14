@@ -3253,100 +3253,87 @@ function stlCellValue() {
 
 
 
+// Watertight solid from a binary height field.
+//
+// Instead of building walls by hand (which kept leaving seams between the top
+// surface and the merged rectangles), this samples the mask on a regular grid
+// and builds a genuine closed shell: displaced top, flat bottom at z = 0 and
+// four side walls, all sharing the same vertices. Every edge is then used by
+// exactly two triangles, which is what makes an STL slice without repair.
+//
+// The approach follows image-to-stl's heightfieldToSolid (MIT, lujijiang),
+// reimplemented here so the app stays dependency free.
 function stlSolid(w, h, hi, withBase) {
-  const INK = 2, PLATE = withBase ? 1 : 0, BED = 0;
+  // Z of each level: bed stays at 0 so the model sits on the print bed.
+  const zBed = 0;
+  const zPlate = withBase ? stlBaseValue() : 0;
+  const zInk = zPlate + stlThickValue();
+
+  // Sample the mask on the cell grid; a cell is ink when most of it is ink.
   const cs = Math.max(1, Math.round(stlCellValue()));
-  const gw = Math.ceil(w / cs), gh = Math.ceil(h / cs);
-  const raised = new Uint8Array(gw * gh);
-  for (let cy = 0; cy < gh; cy++) {
-    const y0 = cy * cs, y1 = Math.min(h, y0 + cs);
-    for (let cx = 0; cx < gw; cx++) {
-      const x0 = cx * cs, x1 = Math.min(w, x0 + cs);
-      let all = 1;
-      for (let y = y0; y < y1 && all; y++) {
-        const row = y * w;
-        for (let x = x0; x < x1; x++) if (!hi[row + x]) { all = 0; break; }
-      }
-      raised[cy * gw + cx] = all;
+  const cols = Math.max(2, Math.ceil(w / cs) + 1);
+  const rows = Math.max(2, Math.ceil(h / cs) + 1);
+  const field = new Float32Array(cols * rows);
+  for (let j = 0; j < rows; j++) {
+    const y = Math.min(h - 1, Math.round(j * (h - 1) / (rows - 1)));
+    for (let i = 0; i < cols; i++) {
+      const x = Math.min(w - 1, Math.round(i * (w - 1) / (cols - 1)));
+      field[j * cols + i] = hi[y * w + x] ? 1 : 0;
     }
   }
-  const H = (cx, cy) => {
-    if (cx < 0 || cy < 0 || cx >= gw || cy >= gh) return BED;
-    return raised[cy * gw + cx] ? INK : PLATE;
-  };
-  const gx = cx => Math.min(w, cx * cs);
-  const gy = cy => Math.min(h, cy * cs);
-  const verts = new Map();
-  const faces = [];
-  const vid = (x, y, layer) => {
-    const k = x + "|" + y + "|" + layer;
-    let id = verts.get(k);
-    if (id === undefined) { id = verts.size; verts.set(k, id); }
-    return id;
-  };
-  // Horizontal rectangle; corners in (x0,y0)(x1,y0)(x1,y1)(x0,y1).
-  const flat = (X0, Y0, X1, Y1, layer, up) => {
-    const a = vid(X0, Y0, layer), b = vid(X1, Y0, layer);
-    const c = vid(X1, Y1, layer), d = vid(X0, Y1, layer);
-    if (up) { faces.push(a, b, c, a, c, d); } else { faces.push(a, d, c, a, c, b); }
-  };
-  // Vertical face; bottom corners a=(X0,Y0) b=(X1,Y1), lifted to c and d.
-  // Vertical face; bottom corners a=(X0,Y0) b=(X1,Y1) lifted to c and d.
-  const wall = (X0, Y0, X1, Y1, high, low) => {
-    const a = vid(X0, Y0, low), b = vid(X1, Y1, low);
-    const c = vid(X1, Y1, high), d = vid(X0, Y0, high);
-    faces.push(a, b, c, a, c, d);
-  };
-  for (const r of stlRects(gw, gh, H)) {
-    if (r.lay <= BED) continue;
-    flat(gx(r.x0), gy(r.y0), gx(r.x1), gy(r.y1), r.lay, true);
-    flat(gx(r.x0), gy(r.y0), gx(r.x1), gy(r.y1), BED, false);
-  }
-  for (let cy = 0; cy <= gh; cy++) {
-    for (let cx = 0; cx < gw; cx++) {
-      const up = H(cx, cy - 1), dn = H(cx, cy);
-      if (up === dn) continue;
-      let x1 = cx + 1;
-      while (x1 < gw && H(x1, cy - 1) === up && H(x1, cy) === dn) x1++;
-      const X0 = gx(cx), X1 = gx(x1), Y = gy(cy);
-      if (up > dn) wall(X0, Y, X1, Y, up, dn);
-      else wall(X1, Y, X0, Y, dn, up);
-      cx = x1 - 1;
+
+  // The field is sampled at cell corners; convert back so the mesh keeps the
+  // original size in pixels (and therefore in mm after scaling).
+  const stepX = (w - 1) / (cols - 1), stepY = (h - 1) / (rows - 1);
+  const n = cols * rows;
+  const verts = new Float32Array(n * 6);
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const idx = j * cols + i;
+      const x = i * stepX, y = j * stepY;
+      const z = field[idx] > 0 ? zInk : zPlate;
+      verts[idx * 3] = x; verts[idx * 3 + 1] = y; verts[idx * 3 + 2] = z;
+      const o = (n + idx) * 3;
+      verts[o] = x; verts[o + 1] = y; verts[o + 2] = zBed;
     }
   }
-  for (let cx = 0; cx <= gw; cx++) {
-    for (let cy = 0; cy < gh; cy++) {
-      const lf = H(cx - 1, cy), rt = H(cx, cy);
-      if (lf === rt) continue;
-      let y1 = cy + 1;
-      while (y1 < gh && H(cx - 1, y1) === lf && H(cx, y1) === rt) y1++;
-      const Y0 = gy(cy), Y1 = gy(y1), X = gx(cx);
-      if (rt > lf) wall(X, Y1, X, Y0, rt, lf);
-      else wall(X, Y0, X, Y1, lf, rt);
-      cy = y1 - 1;
+
+  const quads = (cols - 1) * (rows - 1) * 2 + (cols - 1) * 2 + (rows - 1) * 2;
+  const faces = new Uint32Array(quads * 6);
+  let t = 0;
+  const tri = (a, b, c) => { faces[t++] = a; faces[t++] = b; faces[t++] = c; };
+
+  // Top surface (+Z) and matching underside (-Z), both on the cell grid.
+  for (let j = 0; j < rows - 1; j++) {
+    for (let i = 0; i < cols - 1; i++) {
+      const a = j * cols + i, b = a + 1, c = a + cols, d = c + 1;
+      tri(a, b, d); tri(a, d, c);
+      tri(n + a, n + d, n + b); tri(n + a, n + c, n + d);
     }
   }
-  return { verts, faces };
+  // Side walls, one quad per cell of the border, sharing the border vertices.
+  for (let i = 0; i < cols - 1; i++) {
+    const t0 = i, t1 = i + 1, b0 = n + i, b1 = n + i + 1;
+    tri(b0, b1, t1); tri(b0, t1, t0);
+  }
+  for (let i = 0; i < cols - 1; i++) {
+    const base = (rows - 1) * cols + i;
+    const t0 = base, t1 = base + 1, b0 = n + base, b1 = n + base + 1;
+    tri(b1, b0, t0); tri(b1, t0, t1);
+  }
+  for (let j = 0; j < rows - 1; j++) {
+    const t0 = j * cols, t1 = (j + 1) * cols, b0 = n + t0, b1 = n + t1;
+    tri(b0, t0, t1); tri(b0, t1, b1);
+  }
+  for (let j = 0; j < rows - 1; j++) {
+    const t0 = j * cols + cols - 1, t1 = (j + 1) * cols + cols - 1;
+    const b0 = n + t0, b1 = n + t1;
+    tri(b1, t1, t0); tri(b1, t0, b0);
+  }
+
+  return { verts, faces: faces.subarray(0, t), cols, rows };
 }
-function stlRects(gw, gh, valAt) {
-  const done = new Uint8Array(gw * gh);
-  const out = [];
-  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
-    const p = y * gw + x;
-    if (done[p]) continue;
-    const v = valAt(x, y);
-    let x1 = x + 1;
-    while (x1 < gw && !done[y * gw + x1] && valAt(x1, y) === v) x1++;
-    let y1 = y + 1;
-    grow: while (y1 < gh) {
-      for (let xx = x; xx < x1; xx++) if (done[y1 * gw + xx] || valAt(xx, y1) !== v) break grow;
-      y1++;
-    }
-    for (let yy = y; yy < y1; yy++) for (let xx = x; xx < x1; xx++) done[yy * gw + xx] = 1;
-    out.push({ x0: x, y0: y, x1, y1, lay: v });
-  }
-  return out;
-}
+
 function stlBuildMesh() {
   const thick = stlThickValue();
   const base = stlBaseValue();
@@ -3374,37 +3361,37 @@ function stlBuildMesh() {
     verts: solid.verts,
     faces: solid.faces,
     sx, base, thick,
-    W: w * sx, H: h * sx,
+    W: w * sx, H: h * sx, cols: solid.cols, rows: solid.rows,
     count: solid.faces.length / 3,
   };
 }
 
-// Flatten the welded mesh into binary STL: 9 floats per triangle, normals from
-// the triangle itself so they always agree with the winding.
+// Binary STL. STL has no units and slicers treat Z as up, so the mesh
+// coordinates (x = column, y = row, z = height) are written as
+// (x * sx, z, y * sx) and the whole model lands flat on the bed.
 function stlWriteBinary(mesh) {
-  const { verts, faces, sx, base, thick } = mesh;
-  const pos = new Float32Array(verts.size * 3);
-  for (const [k, id] of verts) {
-    const q = k.split("|");
-    const gx = +q[0], gy = +q[1], layer = +q[2];
-    const z = layer === 0 ? 0 : layer === 1 ? base : base + thick;
-    pos[id * 3] = gx * sx;
-    pos[id * 3 + 1] = gy * sx;
-    pos[id * 3 + 2] = z;
-  }
-
+  const { verts, faces, sx, cols, rows } = mesh;
   const n = faces.length / 3;
   const buf = new ArrayBuffer(84 + n * 50);
   const dv = new DataView(buf);
   new Uint8Array(buf, 0, 80).set(
     new TextEncoder().encode("Binary STL - PCB relief").subarray(0, 80));
   dv.setUint32(80, n, true);
+
+  // Sample indices 0..cols-1 span the image width in (cols-1) steps, so one
+  // step in X is W / (cols-1) mm and one step in Y is H / (rows-1) mm.
+  const kx = mesh.W / Math.max(1, cols - 1);
+  const ky = mesh.H / Math.max(1, rows - 1);
+  const px = idx => verts[idx * 3] * kx;
+  const py = idx => verts[idx * 3 + 1] * ky;
+  const pz = idx => verts[idx * 3 + 2];
+
   let o = 84;
   for (let f = 0; f < n; f++) {
-    const ia = faces[f * 3] * 3, ib = faces[f * 3 + 1] * 3, ic = faces[f * 3 + 2] * 3;
-    const ax = pos[ia], ay = pos[ia + 1], az = pos[ia + 2];
-    const bx = pos[ib], by = pos[ib + 1], bz = pos[ib + 2];
-    const cx = pos[ic], cy = pos[ic + 1], cz = pos[ic + 2];
+    const ia = faces[f * 3], ib = faces[f * 3 + 1], ic = faces[f * 3 + 2];
+    const ax = px(ia), ay = py(ia), az = pz(ia);
+    const bx = px(ib), by = py(ib), bz = pz(ib);
+    const cx = px(ic), cy = py(ic), cz = pz(ic);
     const ux = bx - ax, uy = by - ay, uz = bz - az;
     const vx = cx - ax, vy = cy - ay, vz = cz - az;
     let nx = uy * vz - uz * vy;
