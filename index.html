@@ -969,13 +969,14 @@
             <output id="stlThickVal">мм</output>
           </div>
           <p class="hint" style="margin:2px 0 0" data-i18n="exp.stlthickhint">Висота рельєфу над основою, мм. Введіть число вручну або тягніть повзунок.</p>
-          <div class="field" style="margin-top:8px">
-            <label data-i18n="exp.stlbaseh">Товщина основи, мм</label>
+          <label class="chk" style="margin:6px 0 0"><input type="checkbox" id="stlBase"> <span data-i18n="exp.stlbaseon">Основа під рельєфом</span></label>
+          <div class="slider-row" id="stlBaseRow">
             <input type="number" id="stlBaseNum" min="0.1" max="100" step="0.1" value="1.2"
                    data-i18n-aria="exp.stlbaseh" aria-label="Товщина основи, мм"
                    style="width:86px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:12px;background:var(--input-bg);color:var(--input-text)">
-            <p class="hint" style="margin:2px 0 0" data-i18n="exp.stlbasehint">Суцільний шар під рельєфом — модель залишається твердотільним тілом.</p>
+            <output id="stlBaseVal">мм</output>
           </div>
+          <p class="hint" style="margin:2px 0 0" data-i18n="exp.stlbasehint">Суцільний шар під рельєфом — модель залишається твердотільним тілом.</p>
           <label class="chk" style="margin:6px 0 0"><input type="checkbox" id="stlInvert"> <span data-i18n="exp.stlinvert">Інверсія (негативом)</span></label>
           <label class="chk"><input type="checkbox" id="stlSpecks" checked> <span data-i18n="exp.stlspecks">Видаляти дрібні об'єкти</span></label>
           <div class="slider-row" id="stlSpecksRow">
@@ -3173,6 +3174,8 @@ function stlThickValue() {
   return Math.max(0.01, Math.min(200, v));
 }
 function stlBaseValue() {
+  const box = document.getElementById("stlBase");
+  if (box && !box.checked) return 0;
   const num = document.getElementById("stlBaseNum");
   const raw = parseFloat(num.value);
   const v = isFinite(raw) && raw > 0 ? raw : 1.2;
@@ -3224,7 +3227,12 @@ function stlDespeckle(hi, w, h, minSide) {
 // Height of the surface at a pixel CENTRE, in layers. Everything outside the ink
 // is the plate, everything inside is the relief — a pure step function, which is
 // what makes the side walls fall exactly on pixel edges.
-function stlSolid(w, h, hi) {
+function stlSolid(w, h, hi, withBase) {
+  // With no base plate the top surface is emitted straight at bed level. The
+  // structure below stays identical to the base case (walls and floor both sit
+  // on layer 0), so no triangle is ever duplicated — only the ink tops are
+  // lifted to layer 2, which is exactly the shape standing on z = 0.
+  if (!withBase) return stlSolidLifted(w, h, hi);
   const verts = new Map();
   const faces = [];
   const vid = (gx, gy, layer) => {
@@ -3235,7 +3243,9 @@ function stlSolid(w, h, hi) {
   };
   const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && hi[y * w + x] === 1;
   const tri = (a, b, c) => faces.push(a, b, c);
-  const INK = 2, PLATE = 1, BED = 0;
+  // No base plate: the plate level collapses onto the bed, so the relief sits
+  // directly on z = 0 and the body stays watertight without a floor slab.
+  const INK = 2, PLATE = withBase ? 1 : 0, BED = 0;
 
   // Horizontal top: one quad per pixel, at its own height. Ink pixels sit at
   // INK, the rest at PLATE; the quad corners belong to the pixel, not to the
@@ -3309,6 +3319,64 @@ function stlSolid(w, h, hi) {
   return { verts, faces };
 }
 
+// No-base variant: a separate grid where plain pixels and ink pixels live on
+// their own vertex columns, so no two triangles can ever claim the same edge.
+function stlSolidLifted(w, h, hi) {
+  const verts = new Map();
+  const faces = [];
+  const vid = (gx, gy, layer) => {
+    const k = gx + "|" + gy + "|" + layer;
+    let id = verts.get(k);
+    if (id === undefined) { id = verts.size; verts.set(k, id); }
+    return id;
+  };
+  const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && hi[y * w + x] === 1;
+  const tri = (a, b, c) => faces.push(a, b, c);
+  const LOW = 0, HIGH = 2;
+
+  // Ink tops: they own the HIGH column of every ink pixel corner.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!on(x, y)) continue;
+      const a = vid(x, y, HIGH), b = vid(x + 1, y, HIGH);
+      const c = vid(x + 1, y + 1, HIGH), d = vid(x, y + 1, HIGH);
+      tri(a, b, c);
+      tri(a, c, d);
+    }
+  }
+
+  // Walls: one quad per bare neighbour, from the bed up to the ink top. The
+  // edge is taken so that the outward side is the one seen counter-clockwise.
+  const wall = (X0, Y0, X1, Y1) => {
+    const a = vid(X0, Y0, LOW), b = vid(X1, Y1, LOW);
+    const c = vid(X1, Y1, HIGH), d = vid(X0, Y0, HIGH);
+    tri(a, b, c);
+    tri(a, c, d);
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!on(x, y)) continue;
+      if (!on(x, y - 1)) wall(x, y, x + 1, y);
+      if (!on(x + 1, y)) wall(x + 1, y, x + 1, y + 1);
+      if (!on(x, y + 1)) wall(x + 1, y + 1, x, y + 1);
+      if (!on(x - 1, y)) wall(x, y + 1, x, y);
+    }
+  }
+
+  // Floor: a quad under every ink pixel, facing down at z = 0.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!on(x, y)) continue;
+      const a = vid(x, y, LOW), b = vid(x + 1, y, LOW);
+      const c = vid(x + 1, y + 1, LOW), d = vid(x, y + 1, LOW);
+      tri(a, c, b);
+      tri(a, d, c);
+    }
+  }
+
+  return { verts, faces };
+}
+
 function stlBuildMesh() {
   const thick = stlThickValue();
   const base = stlBaseValue();
@@ -3330,7 +3398,7 @@ function stlBuildMesh() {
 
   const clean = stlDespeckle(hi, w, h, stlMinSideValue());
   const sx = ppm ? 1 / ppm : 0.1;   // mm per pixel
-  const solid = stlSolid(w, h, clean);
+  const solid = stlSolid(w, h, clean, base > 0);
 
   return {
     verts: solid.verts,
@@ -3417,6 +3485,17 @@ if (stlThickNum) stlThickNum.oninput = () => {
   const v = parseFloat(stlThickNum.value);
   if (isFinite(v) && v > 0 && v >= +stlThickEl.min && v <= +stlThickEl.max) stlThickEl.value = v;
 };
+const stlBaseEl = document.getElementById("stlBase");
+const stlBaseRow = document.getElementById("stlBaseRow");
+const stlBaseVal = document.getElementById("stlBaseVal");
+function stlBaseSync() {
+  if (!stlBaseEl) return;
+  if (stlBaseRow) stlBaseRow.style.display = stlBaseEl.checked ? "" : "none";
+  if (stlBaseVal) stlBaseVal.textContent = t("msg.mm");
+}
+if (stlBaseEl) stlBaseEl.onchange = stlBaseSync;
+stlBaseSync();
+
 const stlMinSideEl = document.getElementById("stlMinSide");
 const stlMinSideNum = document.getElementById("stlMinSideNum");
 const stlMinSideVal = document.getElementById("stlMinSideVal");
@@ -5699,7 +5778,8 @@ const I18N = {
     "exp.stl": "STL — 3D-модель для друку",
     "exp.stlthickaria": "Товщина рельєфу, мм",
     "exp.stlthickhint": "Висота рельєфу над основою, мм. Введіть число вручну або тягніть повзунок.",
-    "exp.stlbaseh": "Товщина основи, мм",
+    "exp.stlbaseh": "Товщина основи (мм)",
+    "exp.stlbaseon": "Основа під рельєфом",
     "exp.stlbasehint": "Суцільний шар під рельєфом — модель залишається твердотільним тілом.",
     "exp.stlinvert": "Інверсія (негативом)",
     "exp.stlspecks": "Видаляти дрібні обʼєкти",
@@ -6023,7 +6103,8 @@ const I18N = {
     "exp.stl": "STL — 3D printable model",
     "exp.stlthickaria": "Relief height, mm",
     "exp.stlthickhint": "Height of the relief above the base, mm. Type a value or drag the slider.",
-    "exp.stlbaseh": "Base thickness, mm",
+    "exp.stlbaseh": "Base thickness (mm)",
+    "exp.stlbaseon": "Base plate under the relief",
     "exp.stlbasehint": "A solid layer under the relief — keeps the model a closed body.",
     "exp.stlinvert": "Invert (negative)",
     "exp.stlspecks": "Remove small objects",
